@@ -2,12 +2,17 @@
 import HeaderBar from "./HeaderBar.vue";
 import SideMessagePanel from "./SideMessagePanel.vue";
 import EventLogPanel from "./EventLogPanel.vue";
-import type { WorkflowEvent, WorkflowMessage, WorkflowRiskSummary } from "../../types/workflow";
+import type {
+  WorkflowEvent,
+  WorkflowMessage,
+  WorkflowRiskSummary,
+  WorkflowState,
+} from "../../types/workflow";
 
 defineProps<{
   title: string;
   subtitle: string;
-  workflowState: string;
+  workflowState: WorkflowState;
   runtimeStatus: "idle" | "dispatching" | "error";
   lastError: string | null;
   lastAppliedPatchCount: number;

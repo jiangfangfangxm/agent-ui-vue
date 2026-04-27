@@ -24,4 +24,7 @@ export type WidgetPropsOfType<T extends WidgetType> = WidgetProps<
   UIComponentOfType<T>
 >;
 
-export type WidgetDispatch = (event: WorkflowEventInput) => void;
+export type WidgetDispatch = (
+  eventType: string,
+  payload?: Record<string, unknown>,
+) => void;

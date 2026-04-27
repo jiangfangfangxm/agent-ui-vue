@@ -29,6 +29,6 @@ export function useWidgetEvents(
   return {
     isEventAllowed,
     canDispatch,
-    dispatch: dispatch as WidgetDispatch,
+    dispatch: dispatch satisfies WidgetDispatch,
   };
 }
