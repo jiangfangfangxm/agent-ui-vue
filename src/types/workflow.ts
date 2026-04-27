@@ -2,6 +2,7 @@ export type WidgetType =
   | "text"
   | "alert"
   | "key_value"
+  | "data_table"
   | "badge_list"
   | "checklist"
   | "button_group"
@@ -86,7 +87,60 @@ export type AlertComponent = BaseComponent<
 export type KeyValueComponent = BaseComponent<
   "key_value",
   {
+    layout?: "stack" | "grid";
+    columns?: number;
+    minColumnWidth?: number;
     items: Array<{ label: string; value: string }>;
+  }
+>;
+
+export interface DataTableColumn {
+  key: string;
+  label: string;
+  type?: "text" | "number" | "boolean" | "tag" | "link" | "date" | "action";
+  width?: number | string;
+  minWidth?: number | string;
+  align?: "left" | "center" | "right";
+  format?: "plain" | "percent" | "currency" | "datetime" | "short-date";
+  currency?: string;
+  truncate?: boolean;
+  multiline?: boolean;
+  tagMap?: Record<
+    string,
+    {
+      label?: string;
+      tone?: "success" | "info" | "warning" | "danger";
+    }
+  >;
+  booleanLabels?: {
+    trueLabel?: string;
+    falseLabel?: string;
+  };
+  actions?: DataTableAction[];
+}
+
+export type DataTableRow = Record<
+  string,
+  string | number | boolean | null | undefined
+>;
+
+export interface DataTableAction {
+  label: string;
+  eventType: string;
+  buttonType?: "primary" | "success" | "warning" | "danger" | "info";
+  payload?: Record<string, unknown>;
+  rowFieldMap?: Record<string, string>;
+}
+
+export type DataTableComponent = BaseComponent<
+  "data_table",
+  {
+    columns: DataTableColumn[];
+    rows: DataTableRow[];
+    stripe?: boolean;
+    border?: boolean;
+    size?: "large" | "default" | "small";
+    emptyText?: string;
   }
 >;
 
@@ -136,6 +190,7 @@ export type UIComponent =
   | TextComponent
   | AlertComponent
   | KeyValueComponent
+  | DataTableComponent
   | BadgeListComponent
   | ChecklistComponent
   | ButtonGroupComponent
@@ -146,6 +201,7 @@ export interface UIComponentMap {
   text: TextComponent;
   alert: AlertComponent;
   key_value: KeyValueComponent;
+  data_table: DataTableComponent;
   badge_list: BadgeListComponent;
   checklist: ChecklistComponent;
   button_group: ButtonGroupComponent;

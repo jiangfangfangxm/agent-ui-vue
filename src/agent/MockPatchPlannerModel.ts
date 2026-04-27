@@ -169,9 +169,33 @@ function handleSubmitDecision(
   ];
 }
 
+function handleOpenDetail(
+  _envelope: WorkflowEnvelope,
+  event: WorkflowEvent,
+): PatchOperation[] {
+  const caseId = String(event.payload?.caseId ?? "-");
+  const applicant = String(event.payload?.applicant ?? "-");
+  const amount = String(event.payload?.amount ?? "-");
+
+  return [
+    {
+      op: "prepend_message",
+      value: {
+        id: `msg_detail_${event.id}`,
+        role: "agent",
+        title: "详情已展开",
+        body: `已请求查看案件 ${caseId} 的详情。申请方：${applicant}，申请金额：${amount}。后续可在这里接入真实详情抽屉或侧边面板。`,
+        tone: "info",
+        timestamp: event.timestamp,
+      },
+    },
+  ];
+}
+
 const handlers: Record<string, PatchHandler> = {
   toggle_check: handleToggleCheck,
   submit_decision: handleSubmitDecision,
+  open_detail: handleOpenDetail,
 };
 
 /**

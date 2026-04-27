@@ -4,7 +4,7 @@ export const initialEnvelope: WorkflowEnvelope = {
   id: "wf_risk_review_001",
   version: "1.0.0",
   state: "reviewing",
-  allowedEvents: ["toggle_check", "submit_decision"],
+  allowedEvents: ["toggle_check", "submit_decision", "open_detail"],
   riskSummary: {
     level: "medium",
     summary: "当前请求存在中等合规风险，需要审核人完成最终确认。",
@@ -26,7 +26,7 @@ export const initialEnvelope: WorkflowEnvelope = {
     {
       id: "msg_002",
       role: "system",
-      title: "运行时",
+      title: "运行时提示",
       body: "当前界面由工作流信封和 Schema 驱动渲染。",
       tone: "success",
       timestamp: "09:13",
@@ -35,7 +35,8 @@ export const initialEnvelope: WorkflowEnvelope = {
   page: {
     id: "page_risk_review",
     title: "智能体审核工作台",
-    description: "一个由 Schema 驱动的运行时界面，用于承接智能体决策、用户交互与 Patch 更新。",
+    description:
+      "一个由 Schema 驱动的运行时界面，用于承接智能体决策、用户交互与 Patch 更新。",
     sections: [
       {
         id: "sec_overview",
@@ -47,7 +48,7 @@ export const initialEnvelope: WorkflowEnvelope = {
             type: "text",
             props: {
               content:
-                "这个工作台由工作流 Schema 驱动，而不是写死在页面里的业务逻辑。",
+                "这个工作台由工作流 Schema 驱动，而不是把业务逻辑写死在页面里。",
               variant: "body",
             },
           },
@@ -65,10 +66,16 @@ export const initialEnvelope: WorkflowEnvelope = {
             id: "cmp_kv",
             type: "key_value",
             props: {
+              layout: "grid",
+              columns: 3,
+              minColumnWidth: 220,
               items: [
                 { label: "案件编号", value: "RV-20314" },
                 { label: "申请方", value: "Northwind Supply Co." },
                 { label: "智能体置信度", value: "0.82" },
+                { label: "风险等级", value: "中风险" },
+                { label: "审核阶段", value: "审核中" },
+                { label: "策略状态", value: "待确认" },
               ],
             },
           },
@@ -78,6 +85,163 @@ export const initialEnvelope: WorkflowEnvelope = {
             props: {
               items: ["人工覆盖", "新供应商", "政策声明待补充"],
               tone: "warning",
+            },
+          },
+        ],
+      },
+      {
+        id: "sec_table_demo",
+        title: "审批列表",
+        description: "演示更接近真实业务的审批列表，包括状态、金额、优先级和操作列。",
+        components: [
+          {
+            id: "cmp_table_demo",
+            type: "data_table",
+            props: {
+              stripe: true,
+              border: true,
+              size: "default",
+              emptyText: "暂无审批数据",
+              columns: [
+                {
+                  key: "caseId",
+                  label: "案件编号",
+                  type: "text",
+                  minWidth: 140,
+                },
+                {
+                  key: "applicant",
+                  label: "申请方",
+                  type: "text",
+                  minWidth: 180,
+                },
+                {
+                  key: "approvalStatus",
+                  label: "审批状态",
+                  type: "tag",
+                  minWidth: 120,
+                  tagMap: {
+                    pending: { label: "待审核", tone: "warning" },
+                    escalated: { label: "升级复核", tone: "danger" },
+                    ready: { label: "可直接通过", tone: "success" },
+                  },
+                },
+                {
+                  key: "riskLevel",
+                  label: "风险等级",
+                  type: "tag",
+                  minWidth: 120,
+                  tagMap: {
+                    low: { label: "低风险", tone: "success" },
+                    medium: { label: "中风险", tone: "warning" },
+                    high: { label: "高风险", tone: "danger" },
+                  },
+                },
+                {
+                  key: "amount",
+                  label: "申请金额",
+                  type: "number",
+                  format: "currency",
+                  currency: "CNY",
+                  align: "right",
+                  minWidth: 140,
+                },
+                {
+                  key: "confidence",
+                  label: "置信度",
+                  type: "number",
+                  format: "percent",
+                  align: "right",
+                  minWidth: 120,
+                },
+                {
+                  key: "owner",
+                  label: "当前负责人",
+                  type: "text",
+                  minWidth: 120,
+                },
+                {
+                  key: "priority",
+                  label: "优先级",
+                  type: "tag",
+                  minWidth: 110,
+                  tagMap: {
+                    p1: { label: "P1", tone: "danger" },
+                    p2: { label: "P2", tone: "warning" },
+                    p3: { label: "P3", tone: "info" },
+                  },
+                },
+                {
+                  key: "updatedAt",
+                  label: "最近更新时间",
+                  type: "date",
+                  format: "datetime",
+                  minWidth: 180,
+                },
+                {
+                  key: "note",
+                  label: "审核备注",
+                  type: "text",
+                  minWidth: 280,
+                  multiline: true,
+                },
+                {
+                  key: "actions",
+                  label: "操作",
+                  type: "action",
+                  minWidth: 120,
+                  actions: [
+                    {
+                      label: "查看详情",
+                      eventType: "open_detail",
+                      buttonType: "primary",
+                      rowFieldMap: {
+                        caseId: "caseId",
+                        applicant: "applicant",
+                        amount: "amount",
+                      },
+                    },
+                  ],
+                },
+              ],
+              rows: [
+                {
+                  caseId: "RV-20314",
+                  applicant: "Northwind Supply Co.",
+                  approvalStatus: "pending",
+                  riskLevel: "medium",
+                  amount: 328000,
+                  confidence: 0.82,
+                  owner: "李敏",
+                  priority: "p2",
+                  updatedAt: "2026-04-27T10:20:00+08:00",
+                  note: "该案件存在人工覆盖条件，建议在批准前补充政策声明确认材料。",
+                },
+                {
+                  caseId: "RV-20315",
+                  applicant: "Acme Logistics Asia",
+                  approvalStatus: "escalated",
+                  riskLevel: "high",
+                  amount: 1245000,
+                  confidence: 0.64,
+                  owner: "张晨",
+                  priority: "p1",
+                  updatedAt: "2026-04-27T10:45:00+08:00",
+                  note: "历史交易次数较少，且供应商为首次接入对象，建议升级人工复核级别。",
+                },
+                {
+                  caseId: "RV-20316",
+                  applicant: "Harbor Medical Devices",
+                  approvalStatus: "ready",
+                  riskLevel: "low",
+                  amount: 89600,
+                  confidence: 0.93,
+                  owner: "王蕾",
+                  priority: "p3",
+                  updatedAt: "2026-04-27T11:05:00+08:00",
+                  note: "材料完整，制裁筛查通过，可进入自动化后续流程。",
+                },
+              ],
             },
           },
         ],

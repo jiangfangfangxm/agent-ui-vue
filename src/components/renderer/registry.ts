@@ -5,6 +5,7 @@ import AuditPanelWidget from "../widgets/AuditPanelWidget.vue";
 import BadgeListWidget from "../widgets/BadgeListWidget.vue";
 import ButtonGroupWidget from "../widgets/ButtonGroupWidget.vue";
 import ChecklistWidget from "../widgets/ChecklistWidget.vue";
+import DataTableWidget from "../widgets/DataTableWidget.vue";
 import KeyValueWidget from "../widgets/KeyValueWidget.vue";
 import ResultSummaryWidget from "../widgets/ResultSummaryWidget.vue";
 import TextWidget from "../widgets/TextWidget.vue";
@@ -15,6 +16,7 @@ export const registry = {
   text: TextWidget,
   alert: AlertWidget,
   key_value: KeyValueWidget,
+  data_table: DataTableWidget,
   badge_list: BadgeListWidget,
   checklist: ChecklistWidget,
   button_group: ButtonGroupWidget,
