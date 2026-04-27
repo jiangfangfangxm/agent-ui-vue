@@ -13,10 +13,10 @@ type PatchHandler = (
   event: WorkflowEvent,
 ) => PatchOperation[];
 
-function buildChecklistSection(
-  envelope: WorkflowEnvelope,
-  event: WorkflowEvent,
-): UISection | null {
+function findReviewChecklist(envelope: WorkflowEnvelope): {
+  section: UISection;
+  checklist: ChecklistComponent;
+} | null {
   const section = envelope.page.sections.find(
     (entry) => entry.id === "sec_main_review",
   );
@@ -28,24 +28,91 @@ function buildChecklistSection(
     return null;
   }
 
-  const itemId = String(event.payload?.itemId ?? "");
-  const items = checklist.props.items.map((item) =>
-    item.id === itemId ? { ...item, checked: !item.checked } : item,
-  );
+  return { section, checklist };
+}
 
+function replaceChecklistInSection(
+  section: UISection,
+  checklist: ChecklistComponent,
+): UISection {
   return {
     ...section,
     components: section.components.map((component) =>
-      component.id === checklist.id
-        ? {
-            ...checklist,
-            props: {
-              ...checklist.props,
-              items,
-            },
-          }
-        : component,
+      component.id === checklist.id ? checklist : component,
     ),
+  };
+}
+
+function buildChecklistSection(
+  envelope: WorkflowEnvelope,
+  event: WorkflowEvent,
+): UISection | null {
+  const reviewState = findReviewChecklist(envelope);
+
+  if (!reviewState) {
+    return null;
+  }
+
+  const itemId = String(event.payload?.itemId ?? "");
+  const items = reviewState.checklist.props.items.map((item) =>
+    item.id === itemId ? { ...item, checked: !item.checked } : item,
+  );
+
+  return replaceChecklistInSection(reviewState.section, {
+    ...reviewState.checklist,
+    props: {
+      ...reviewState.checklist.props,
+      items,
+    },
+  });
+}
+
+function buildChecklistAdditionSection(
+  envelope: WorkflowEnvelope,
+  event: WorkflowEvent,
+): { section: UISection; normalizedLabel: string } | null {
+  const reviewState = findReviewChecklist(envelope);
+
+  if (!reviewState) {
+    return null;
+  }
+
+  const normalizedLabel = String(event.payload?.label ?? "").trim();
+
+  if (!normalizedLabel) {
+    return null;
+  }
+
+  const exists = reviewState.checklist.props.items.some(
+    (item) => item.label.trim().toLowerCase() === normalizedLabel.toLowerCase(),
+  );
+
+  if (exists) {
+    return {
+      section: reviewState.section,
+      normalizedLabel,
+    };
+  }
+
+  const nextChecklist: ChecklistComponent = {
+    ...reviewState.checklist,
+    props: {
+      ...reviewState.checklist.props,
+      items: [
+        ...reviewState.checklist.props.items,
+        {
+          id: `item_custom_${event.id}`,
+          label: normalizedLabel,
+          description: "由审核人在当前工作流中手动补充。",
+          checked: false,
+        },
+      ],
+    },
+  };
+
+  return {
+    section: replaceChecklistInSection(reviewState.section, nextChecklist),
+    normalizedLabel,
   };
 }
 
@@ -112,6 +179,85 @@ function handleToggleCheck(
         body: `审核人已将清单进度更新为 ${checkedCount} 项已完成。`,
         tone: "info",
         timestamp: event.timestamp,
+      },
+    },
+  ];
+}
+
+function handleAddChecklistItem(
+  envelope: WorkflowEnvelope,
+  event: WorkflowEvent,
+): PatchOperation[] {
+  const reviewState = findReviewChecklist(envelope);
+  const normalizedLabel = String(event.payload?.label ?? "").trim();
+
+  if (!reviewState || !normalizedLabel) {
+    return [
+      {
+        op: "prepend_message",
+        value: {
+          id: `msg_add_check_invalid_${event.id}`,
+          role: "system",
+          title: "新增审核事项失败",
+          body: "请输入有效的审核事项内容后再提交。",
+          tone: "warning",
+          timestamp: event.timestamp,
+        },
+      },
+    ];
+  }
+
+  const exists = reviewState.checklist.props.items.some(
+    (item) => item.label.trim().toLowerCase() === normalizedLabel.toLowerCase(),
+  );
+
+  if (exists) {
+    return [
+      {
+        op: "prepend_message",
+        value: {
+          id: `msg_add_check_duplicate_${event.id}`,
+          role: "system",
+          title: "审核事项已存在",
+          body: `“${normalizedLabel}” 已在当前清单中，无需重复添加。`,
+          tone: "warning",
+          timestamp: event.timestamp,
+        },
+      },
+    ];
+  }
+
+  const nextState = buildChecklistAdditionSection(envelope, event);
+
+  if (!nextState) {
+    return [];
+  }
+
+  return [
+    {
+      op: "replace_section",
+      sectionId: nextState.section.id,
+      value: nextState.section,
+    },
+    {
+      op: "prepend_message",
+      value: {
+        id: `msg_add_check_${event.id}`,
+        role: "agent",
+        title: "审核事项已添加",
+        body: `已将新的审核事项“${nextState.normalizedLabel}”加入当前清单。`,
+        tone: "success",
+        timestamp: event.timestamp,
+      },
+    },
+    {
+      op: "set_risk_summary",
+      value: {
+        ...envelope.riskSummary,
+        details: [
+          `人工补充审核事项：${nextState.normalizedLabel}`,
+          ...envelope.riskSummary.details,
+        ].slice(0, 5),
       },
     },
   ];
@@ -194,6 +340,7 @@ function handleOpenDetail(
 
 const handlers: Record<string, PatchHandler> = {
   toggle_check: handleToggleCheck,
+  add_checklist_item: handleAddChecklistItem,
   submit_decision: handleSubmitDecision,
   open_detail: handleOpenDetail,
 };

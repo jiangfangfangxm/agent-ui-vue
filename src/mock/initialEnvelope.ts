@@ -4,7 +4,12 @@ export const initialEnvelope: WorkflowEnvelope = {
   id: "wf_risk_review_001",
   version: "1.0.0",
   state: "reviewing",
-  allowedEvents: ["toggle_check", "submit_decision", "open_detail"],
+  allowedEvents: [
+    "toggle_check",
+    "add_checklist_item",
+    "submit_decision",
+    "open_detail",
+  ],
   riskSummary: {
     level: "medium",
     summary: "当前请求存在中等合规风险，需要审核人完成最终确认。",
@@ -277,7 +282,31 @@ export const initialEnvelope: WorkflowEnvelope = {
                   description: "在最终结论回传给智能体前必须完成此项确认。",
                   checked: false,
                 },
+                {
+                  id: "item_bank",
+                  label: "已核验付款账户与开户主体一致",
+                  description: "确认付款账户名称、开户主体与合同主体一致。",
+                  checked: false,
+                },
+                {
+                  id: "item_contract",
+                  label: "已确认合同补充条款已归档",
+                  description: "补充协议、例外条款和审批意见均应留痕归档。",
+                  checked: false,
+                },
               ],
+            },
+          },
+          {
+            id: "cmp_custom_check_input",
+            type: "text_input",
+            props: {
+              eventType: "add_checklist_item",
+              label: "新增审核事项",
+              placeholder: "例如：确认付款账户与开户主体一致",
+              buttonLabel: "添加到清单",
+              helperText: "输入后会由运行时生成 patch，并把新的审核事项回写到当前 checklist。",
+              clearOnSubmit: true,
             },
           },
           {

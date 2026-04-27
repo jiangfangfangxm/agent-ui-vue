@@ -9,11 +9,13 @@ import DataTableWidget from "../widgets/DataTableWidget.vue";
 import KeyValueWidget from "../widgets/KeyValueWidget.vue";
 import ResultSummaryWidget from "../widgets/ResultSummaryWidget.vue";
 import TextWidget from "../widgets/TextWidget.vue";
+import TextInputWidget from "../widgets/TextInputWidget.vue";
 
 export type WidgetRegistry = Record<WidgetType, Component>;
 
 export const registry = {
   text: TextWidget,
+  text_input: TextInputWidget,
   alert: AlertWidget,
   key_value: KeyValueWidget,
   data_table: DataTableWidget,

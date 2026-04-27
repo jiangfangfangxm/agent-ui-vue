@@ -1,5 +1,6 @@
 export type WidgetType =
   | "text"
+  | "text_input"
   | "alert"
   | "key_value"
   | "data_table"
@@ -81,6 +82,18 @@ export type AlertComponent = BaseComponent<
     title: string;
     description: string;
     tone: "success" | "info" | "warning" | "error";
+  }
+>;
+
+export type TextInputComponent = BaseComponent<
+  "text_input",
+  {
+    eventType: string;
+    label?: string;
+    placeholder?: string;
+    buttonLabel?: string;
+    helperText?: string;
+    clearOnSubmit?: boolean;
   }
 >;
 
@@ -188,6 +201,7 @@ export type AuditPanelComponent = BaseComponent<
 
 export type UIComponent =
   | TextComponent
+  | TextInputComponent
   | AlertComponent
   | KeyValueComponent
   | DataTableComponent
@@ -199,6 +213,7 @@ export type UIComponent =
 
 export interface UIComponentMap {
   text: TextComponent;
+  text_input: TextInputComponent;
   alert: AlertComponent;
   key_value: KeyValueComponent;
   data_table: DataTableComponent;
