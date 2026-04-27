@@ -40,6 +40,7 @@ function createRuntimeMessage(
   };
 }
 
+// 当前 runtime 先接一个 mock planner，后续可以平滑替换成真实 Agent。
 const patchPlanner = new RuntimePatchPlannerAgent(
   new MockPatchPlannerModel(),
 );
