@@ -4,9 +4,13 @@
 
 `agent-ui-vue` 不是传统的“页面组件直接维护业务状态”的前端项目，而是一套 `Agent-driven UI Runtime Engine` 的前端原型。
 
+当前主示例场景已经演进为：
+
+**预警核查工作台**
+
 核心链路是：
 
-`用户交互 -> WorkflowEvent -> Runtime -> Patch Planner Agent -> PatchOperation[] -> applyPatches() -> UI 更新`
+`页面初始化 / 用户交互 -> WorkflowEvent -> Runtime -> Patch Planner Agent -> PatchOperation[] -> applyPatches() -> UI 更新`
 
 这意味着：
 
@@ -22,10 +26,12 @@
 - Widget registry
 - Patch Engine
 - Mock Patch Planner Agent
-- 审批列表 `data_table` 示例
-- 审核清单 `checklist` 示例
-- 运行时支持“新增审核事项”
-- 点击“批准”后生成审核报告 section
+- 页面启动自动触发 `init_event`
+- `init_event` 回填预警详情与核查方向
+- 关联台账 `data_table` 示例
+- 支持人工新增核查方向
+- 点击“执行核查”触发 `Risk_Check_Event`
+- 根据风险核查结果生成报告 section
 
 ## 3. 关键目录与职责
 
@@ -33,7 +39,7 @@
 
 - [src/types/workflow.ts](C:/Users/PC/Documents/Codex/2026-04-24/github/agent-ui-vue/src/types/workflow.ts)
 
-定义整个运行时的核心数据协议：
+这里定义运行时共享的数据模型：
 
 - `WorkflowEnvelope`
 - `UIPageSchema`
@@ -51,7 +57,7 @@
 - 持有当前 `envelope`
 - 记录 `eventLog`
 - 接收 `dispatchEvent`
-- 调用 Patch Planner
+- 调用 planner
 - 调用 `applyPatches()`
 - 维护 runtime 状态和错误态
 
@@ -71,7 +77,7 @@
 
 职责：
 
-- 把用户事件解释成工作流迁移
+- 把事件解释成工作流迁移
 - 生成 `PatchOperation[]`
 - 校验 patch 计划是否合法
 
@@ -108,11 +114,82 @@
 
 - [src/mock/initialEnvelope.ts](C:/Users/PC/Documents/Codex/2026-04-24/github/agent-ui-vue/src/mock/initialEnvelope.ts)
 
-这里定义了当前 demo 页面。
+这里定义当前 demo 页面：
 
-如果要快速调整 mock 展示效果，通常从这里入手。
+- 预警情况详情
+- 关联台账
+- 核查方向
+- 审计面板
 
-## 4. 重要开发约束
+## 4. 当前 mock 交互说明
+
+### 页面初始化
+
+页面挂载后，`App.vue` 会自动触发：
+
+- `init_event`
+
+随后 mock planner 会返回 patch：
+
+- 更新 `sec_overview`
+- 更新 `sec_main_review`
+- 移除 `init_event` 的允许权限
+- 更新风险摘要
+- 追加初始化消息
+
+### 预警情况详情
+
+`sec_overview` 里只有一个 `key_value` widget。
+
+初始内容只是占位值，真正的预警详情来自 `init_event` 触发后的 patch 回填。
+
+### 核查方向
+
+`sec_main_review` 的标题已经改成：
+
+- `核查方向`
+
+其中 checklist 内容不再是前端写死的审核项，而是 mock 服务端返回的核查建议。
+
+### 新增核查方向
+
+输入框标题已经改成：
+
+- `新增核查方向`
+
+交互机制保持不变：
+
+- 输入文本
+- 触发 `add_checklist_item`
+- planner 返回 patch
+- checklist 被回写更新
+
+### 执行核查
+
+主按钮已改成：
+
+- `执行核查`
+
+触发事件：
+
+- `Risk_Check_Event`
+
+当前行为：
+
+- planner 返回风险核查报告 patch
+- 生成或更新 `sec_review_report`
+- 报告内容通过 `text` widget 展示
+
+### 关联台账
+
+`data_table` 目前用于展示与预警相关的台账信息。  
+“查看详情”会触发：
+
+- `open_detail`
+
+当前只在消息面板中返回提示消息。
+
+## 5. 重要开发约束
 
 维护这个项目时，请尽量遵守这些规则：
 
@@ -122,40 +199,6 @@
 4. 新 UI 类型先定义 schema，再补 widget 和 registry
 5. 新 section 的变化优先使用 `replace_section / append_section / remove_section`
 6. 不要把业务逻辑重新塞回 `App.vue` 或 widget
-
-## 5. 当前 mock 交互说明
-
-### 审批列表
-
-在 `data_table` 示例中：
-
-- 可以查看更接近真实业务的审批字段
-- `查看详情` 会触发 `open_detail`
-- 当前实现会在消息面板中返回一条提示消息
-
-### 审核清单
-
-在 `sec_main_review` 中：
-
-- 勾选 checklist 会触发 `toggle_check`
-- 新增审核事项输入框会触发 `add_checklist_item`
-- runtime 会生成 patch 并回写 checklist
-
-### 批准
-
-点击“批准”后：
-
-- `state` 变为 `presenting_result`
-- 生成 `sec_review_report`
-- 审核报告会插入到 `sec_main_review` 前面
-- `allowedEvents` 被清空
-
-### 退回修改
-
-点击“退回修改”后：
-
-- `state` 变为 `awaiting_revision`
-- `sec_main_review` 被替换为结果区
 
 ## 6. 开发与运行
 
@@ -181,16 +224,17 @@ npm run build
 
 每次改动后，至少验证：
 
-1. checklist 勾选是否正常
-2. 新增审核事项是否能回写 checklist
-3. `data_table` 的“查看详情”是否会产生消息
-4. 点击“批准”后是否生成审核报告 section
-5. 点击“退回修改”后是否切到结果区
+1. 页面打开后是否自动触发 `init_event`
+2. “预警情况详情”是否被自动回填
+3. “核查方向”是否显示服务端建议
+4. 新增核查方向是否能回写 checklist
+5. “执行核查”后是否生成核查报告 section
+6. `data_table` 的“查看详情”是否会产生消息
 
 ## 8. 已知情况
 
 - 当前项目仍以 mock planner 为主，尚未接真实 Agent API
-- 有过历史中文编码污染，新增或重写文件时建议统一使用 UTF-8
+- 历史上有过中文编码污染，新增或重写文件时建议统一使用 UTF-8
 - 当前测试体系还不完整，更多依赖手测和 build 验证
 
 ## 9. 推荐后续方向
@@ -199,9 +243,9 @@ npm run build
 
 1. 为 `patch.ts` 和 planner 补单元测试
 2. 接入真实的 `PatchPlannerModel`
-3. 把审核报告从单一 `text` 组件拆成结构化组件组合
-4. 补充更多可插拔 widget
-5. 增加更清晰的开发约束文档
+3. 把核查报告从单一 `text` 组件拆成结构化组件组合
+4. 把 `init_event` 替换成真实后端初始化接口
+5. 增强事件审计与回放能力
 
 ## 10. 新同事接手建议
 
@@ -211,4 +255,3 @@ npm run build
 2. 结合本文件快速理解项目边界
 3. 跑起本地页面并手测一遍
 4. 从一个小任务开始熟悉，例如新增一个 widget 或新增一个 patch 行为
-
