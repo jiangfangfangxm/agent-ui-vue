@@ -19,13 +19,18 @@ type PatchHandler = (
   event: WorkflowEvent,
 ) => PatchOperation[];
 
+function findSection(
+  envelope: WorkflowEnvelope,
+  sectionId: string,
+): UISection | null {
+  return envelope.page.sections.find((entry) => entry.id === sectionId) ?? null;
+}
+
 function findReviewChecklist(envelope: WorkflowEnvelope): {
   section: UISection;
   checklist: ChecklistComponent;
 } | null {
-  const section = envelope.page.sections.find(
-    (entry) => entry.id === "sec_main_review",
-  );
+  const section = findSection(envelope, "sec_main_review");
   const checklist = section?.components.find(
     (component): component is ChecklistComponent => component.type === "checklist",
   );
@@ -40,7 +45,7 @@ function findReviewChecklist(envelope: WorkflowEnvelope): {
 function findOverviewKeyValue(
   envelope: WorkflowEnvelope,
 ): KeyValueComponent | null {
-  const section = envelope.page.sections.find((entry) => entry.id === "sec_overview");
+  const section = findSection(envelope, "sec_overview");
   const keyValue = section?.components.find(
     (component): component is KeyValueComponent => component.type === "key_value",
   );
@@ -160,39 +165,78 @@ function buildWarningDetailSection(): UISection {
   };
 }
 
-function buildResultSection(sectionId: string, decision: string): UISection {
-  const approved = decision === "approve";
-
+function buildReviewDirectionSection(): UISection {
   return {
-    id: sectionId,
-    title: approved ? "核查结果" : "退回结果",
-    description: "这一节内容由模拟智能体作为 Patch 结果返回。",
+    id: "sec_main_review",
+    title: "核查方向",
+    description: "由服务端返回的核查建议与人工补充方向组成。",
     components: [
       {
-        id: "cmp_result",
-        type: "result_summary",
+        id: "cmp_checklist",
+        type: "checklist",
         props: {
-          status: approved ? "success" : "warning",
-          headline: approved ? "已完成核查" : "已退回补充",
-          summary: approved
-            ? "核查人员已完成预警核查，相关信息可进入后续处置流程。"
-            : "核查人员要求补充更多材料后再继续处理该预警。",
-          nextSteps: approved
-            ? [
-                "将核查结论同步给后续处置系统。",
-                "保留当前核查记录作为审计依据。",
-              ]
-            : [
-                "通知相关团队补充证明材料。",
-                "待材料齐全后重新发起核查流程。",
-              ],
+          action: {
+            eventType: "toggle_check",
+          },
+          items: [
+            {
+              id: "item_account_flow",
+              label: "核查近 7 日异常交易流水的真实业务背景",
+              description: "确认短时间内高频转入转出是否有真实贸易或结算依据。",
+              checked: false,
+            },
+            {
+              id: "item_counterparty",
+              label: "核验交易对手与受益人之间是否存在隐性关联",
+              description: "关注法人、联系电话、开户地址及历史交易网络中的重叠关系。",
+              checked: false,
+            },
+            {
+              id: "item_region",
+              label: "核查资金是否流向高风险地区或敏感通道",
+              description: "重点关注是否存在绕道结算、拆单转移或异常跨境路径。",
+              checked: false,
+            },
+            {
+              id: "item_documents",
+              label: "补充核验业务合同、发票与物流凭证的一致性",
+              description: "确认基础贸易资料是否与本次预警触发交易相匹配。",
+              checked: false,
+            },
+          ],
+        },
+      },
+      {
+        id: "cmp_custom_check_input",
+        type: "text_input",
+        props: {
+          eventType: "add_checklist_item",
+          label: "新增核查方向",
+          placeholder: "例如：核验交易对手与受益人是否存在隐性关联",
+          buttonLabel: "添加到清单",
+          helperText: "输入后会由运行时生成 patch，并把新的核查方向回写到当前 checklist。",
+          clearOnSubmit: true,
+        },
+      },
+      {
+        id: "cmp_actions",
+        type: "button_group",
+        props: {
+          actions: [
+            {
+              label: "执行核查",
+              eventType: "Risk_Check_Event",
+              payload: { action: "execute" },
+              buttonType: "primary",
+            },
+          ],
         },
       },
     ],
   };
 }
 
-function buildReviewReportText(envelope: WorkflowEnvelope): string {
+function buildRiskCheckReportText(envelope: WorkflowEnvelope): string {
   const keyValue = findOverviewKeyValue(envelope);
   const reviewState = findReviewChecklist(envelope);
 
@@ -208,41 +252,41 @@ function buildReviewReportText(envelope: WorkflowEnvelope): string {
   const reviewedContent =
     checkedItems.length > 0
       ? checkedItems.map((item) => `- ${item.label}`).join("\n")
-      : "- 暂无已勾选的核查事项";
+      : "- 当前尚未勾选已完成的核查方向";
 
   const pendingContent =
     uncheckedItems.length > 0
       ? uncheckedItems.map((item) => `- ${item.label}`).join("\n")
-      : "- 无待补充事项";
+      : "- 无待执行核查方向";
 
   return [
-    "核查报告",
+    "风险核查报告",
     "",
     "预警基本情况",
     ...(profileLines.length > 0 ? profileLines : ["- 暂无预警详情信息"]),
     "",
-    "已核查内容",
+    "已执行核查内容",
     reviewedContent,
     "",
-    "待补充关注项",
+    "待继续关注方向",
     pendingContent,
     "",
     "核查结论",
-    "核查人员已完成本次预警核查。结合当前预警详情、核查清单执行情况与审批列表信息，建议将该预警移交后续处置流程，并保留当前记录作为审计依据。",
+    "系统已根据当前预警详情与核查方向执行风险核查。综合现有信息判断，该客户交易行为存在较高可疑度，建议继续升级人工处置，并保留本次核查过程作为后续审计依据。",
   ].join("\n");
 }
 
-function buildReviewReportSection(envelope: WorkflowEnvelope): UISection {
+function buildRiskCheckReportSection(envelope: WorkflowEnvelope): UISection {
   return {
     id: "sec_review_report",
     title: "核查报告",
-    description: "由运行时在完成核查后生成的结构化报告。",
+    description: "由 Risk_Check_Event 触发后返回的核查报告。",
     components: [
       {
         id: "cmp_review_report",
         type: "text",
         props: {
-          content: buildReviewReportText(envelope),
+          content: buildRiskCheckReportText(envelope),
           variant: "body",
         },
       },
@@ -250,8 +294,8 @@ function buildReviewReportSection(envelope: WorkflowEnvelope): UISection {
   };
 }
 
-function buildReviewReportPatches(envelope: WorkflowEnvelope): PatchOperation[] {
-  const reportSection = buildReviewReportSection(envelope);
+function buildRiskCheckReportPatches(envelope: WorkflowEnvelope): PatchOperation[] {
+  const reportSection = buildRiskCheckReportSection(envelope);
   const exists = envelope.page.sections.some(
     (section) => section.id === reportSection.id,
   );
@@ -290,6 +334,11 @@ function handleInitEvent(
       value: buildWarningDetailSection(),
     },
     {
+      op: "replace_section",
+      sectionId: "sec_main_review",
+      value: buildReviewDirectionSection(),
+    },
+    {
       op: "set_allowed_events",
       value: envelope.allowedEvents.filter((eventType) => eventType !== "init_event"),
     },
@@ -297,11 +346,11 @@ function handleInitEvent(
       op: "set_risk_summary",
       value: {
         level: "high",
-        summary: "预警详情已初始化完成，当前预警需尽快进入人工核查。",
+        summary: "预警详情与核查方向已初始化完成，当前预警需尽快进入人工核查。",
         details: [
           "命中高频异常交易预警。",
-          "客户已被标记为待人工核查。",
-          "初始化数据由服务端 patch 回填完成。",
+          "系统已回填 4 条核查建议。",
+          "当前状态为待人工核查。",
         ],
       },
     },
@@ -311,7 +360,7 @@ function handleInitEvent(
         id: `msg_init_${event.id}`,
         role: "system",
         title: "预警详情已初始化",
-        body: "服务端已返回 init_event 对应的 patch，并更新了“预警情况详情”区块。",
+        body: "服务端已返回 init_event 对应的 patch，并更新了“预警情况详情”与“核查方向”区块。",
         tone: "success",
         timestamp: event.timestamp,
       },
@@ -346,7 +395,7 @@ function handleToggleCheck(
       value: {
         id: `msg_toggle_${event.id}`,
         role: "user",
-        title: "核查清单已更新",
+        title: "核查方向已更新",
         body: `核查人员已将清单进度更新为 ${checkedCount} 项已完成。`,
         tone: "info",
         timestamp: event.timestamp,
@@ -369,8 +418,8 @@ function handleAddChecklistItem(
         value: {
           id: `msg_add_check_invalid_${event.id}`,
           role: "system",
-          title: "新增核查事项失败",
-          body: "请输入有效的核查事项内容后再提交。",
+          title: "新增核查方向失败",
+          body: "请输入有效的核查方向内容后再提交。",
           tone: "warning",
           timestamp: event.timestamp,
         },
@@ -389,7 +438,7 @@ function handleAddChecklistItem(
         value: {
           id: `msg_add_check_duplicate_${event.id}`,
           role: "system",
-          title: "核查事项已存在",
+          title: "核查方向已存在",
           body: `“${normalizedLabel}” 已在当前清单中，无需重复添加。`,
           tone: "warning",
           timestamp: event.timestamp,
@@ -415,8 +464,8 @@ function handleAddChecklistItem(
       value: {
         id: `msg_add_check_${event.id}`,
         role: "agent",
-        title: "核查事项已添加",
-        body: `已将新的核查事项“${nextState.normalizedLabel}”加入当前清单。`,
+        title: "核查方向已添加",
+        body: `已将新的核查方向“${nextState.normalizedLabel}”加入当前清单。`,
         tone: "success",
         timestamp: event.timestamp,
       },
@@ -426,7 +475,7 @@ function handleAddChecklistItem(
       value: {
         ...envelope.riskSummary,
         details: [
-          `人工补充核查事项：${nextState.normalizedLabel}`,
+          `人工补充核查方向：${nextState.normalizedLabel}`,
           ...envelope.riskSummary.details,
         ].slice(0, 5),
       },
@@ -434,60 +483,16 @@ function handleAddChecklistItem(
   ];
 }
 
-function handleSubmitDecision(
+function handleRiskCheckEvent(
   envelope: WorkflowEnvelope,
   event: WorkflowEvent,
 ): PatchOperation[] {
-  const decision = String(event.payload?.decision ?? "revise");
-
-  if (decision === "approve") {
-    return [
-      {
-        op: "set_state",
-        value: "presenting_result",
-      },
-      ...buildReviewReportPatches(envelope),
-      {
-        op: "set_allowed_events",
-        value: [],
-      },
-      {
-        op: "set_risk_summary",
-        value: {
-          level: "low",
-          summary: "核查人员已完成预警核查，运行时已准备进入最终处置阶段。",
-          details: [
-            "人工核查已顺利完成。",
-            "核查报告已生成，可作为后续处置与审计依据。",
-          ],
-        },
-      },
-      {
-        op: "prepend_message",
-        value: {
-          id: `msg_decision_${event.id}`,
-          role: "agent",
-          title: "核查报告已生成",
-          body: "运行时已接收批准事件，并在页面中追加核查报告 section。",
-          tone: "success",
-          timestamp: event.timestamp,
-        },
-      },
-    ];
-  }
-
-  const sectionId = "sec_main_review";
-
   return [
     {
       op: "set_state",
-      value: "awaiting_revision",
+      value: "presenting_result",
     },
-    {
-      op: "replace_section",
-      sectionId,
-      value: buildResultSection(sectionId, decision),
-    },
+    ...buildRiskCheckReportPatches(envelope),
     {
       op: "set_allowed_events",
       value: [],
@@ -495,19 +500,23 @@ function handleSubmitDecision(
     {
       op: "set_risk_summary",
       value: {
-        level: "medium",
-        summary: "核查人员要求先补充修改，当前预警暂不能继续流转。",
-        details: ["需要补充更多核查材料后再重新提交。"],
+        level: "high",
+        summary: "风险核查已执行完成，建议将当前预警升级进入后续处置流程。",
+        details: [
+          "核查报告已生成。",
+          "命中预警的关键方向已进入人工复核结论。",
+          "建议保留全部核查轨迹作为审计依据。",
+        ],
       },
     },
     {
       op: "prepend_message",
       value: {
-        id: `msg_decision_${event.id}`,
+        id: `msg_risk_check_${event.id}`,
         role: "agent",
-        title: "Patch 已应用",
-        body: "运行时已接收退回修改类 Patch，并完成界面切换。",
-        tone: "warning",
+        title: "核查报告已生成",
+        body: "运行时已接收 Risk_Check_Event，并将核查结果写入报告区块。",
+        tone: "success",
         timestamp: event.timestamp,
       },
     },
@@ -529,7 +538,7 @@ function handleOpenDetail(
         id: `msg_detail_${event.id}`,
         role: "agent",
         title: "详情已展开",
-        body: `已请求查看案件 ${caseId} 的详情。申请方：${applicant}，申请金额：${amount}。后续可在这里接入真实详情抽屉或侧边面板。`,
+        body: `已请求查看案件 ${caseId} 的详情。客户名称：${applicant}，关联金额：${amount}。后续可在这里接入真实详情抽屉或侧边面板。`,
         tone: "info",
         timestamp: event.timestamp,
       },
@@ -541,7 +550,7 @@ const handlers: Record<string, PatchHandler> = {
   init_event: handleInitEvent,
   toggle_check: handleToggleCheck,
   add_checklist_item: handleAddChecklistItem,
-  submit_decision: handleSubmitDecision,
+  Risk_Check_Event: handleRiskCheckEvent,
   open_detail: handleOpenDetail,
 };
 

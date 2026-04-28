@@ -13,7 +13,7 @@ export const initialEnvelope: WorkflowEnvelope = {
     "init_event",
     "toggle_check",
     "add_checklist_item",
-    "submit_decision",
+    "Risk_Check_Event",
     "open_detail",
   ],
   riskSummary: {
@@ -21,7 +21,7 @@ export const initialEnvelope: WorkflowEnvelope = {
     summary: "当前存在一条待核查预警，建议先完成详情初始化与人工复核。",
     details: [
       "预警详情将在页面初始化时通过 init_event 回填。",
-      "核查过程中仍需结合审批列表与审核清单完成最终判断。",
+      "核查方向将由服务端建议并写入核查清单。",
     ],
   },
   messages: [
@@ -29,7 +29,7 @@ export const initialEnvelope: WorkflowEnvelope = {
       id: "msg_001",
       role: "system",
       title: "工作台已启动",
-      body: "页面加载后将自动触发 init_event，并由服务端返回 patch 更新预警详情。",
+      body: "页面加载后将自动触发 init_event，并由服务端返回 patch 更新预警详情与核查方向。",
       tone: "info",
       timestamp: "09:12",
     },
@@ -65,8 +65,8 @@ export const initialEnvelope: WorkflowEnvelope = {
       },
       {
         id: "sec_table_demo",
-        title: "审批列表",
-        description: "演示更接近真实业务的审批列表，包括状态、金额、优先级和操作列。",
+        title: "关联台账",
+        description: "演示与当前预警相关的审批台账与关联案件。",
         components: [
           {
             id: "cmp_table_demo",
@@ -75,19 +75,19 @@ export const initialEnvelope: WorkflowEnvelope = {
               stripe: true,
               border: true,
               size: "default",
-              emptyText: "暂无审批数据",
+              emptyText: "暂无关联数据",
               columns: [
                 { key: "caseId", label: "案件编号", type: "text", minWidth: 140 },
-                { key: "applicant", label: "申请方", type: "text", minWidth: 180 },
+                { key: "applicant", label: "客户名称", type: "text", minWidth: 180 },
                 {
                   key: "approvalStatus",
-                  label: "审批状态",
+                  label: "处理状态",
                   type: "tag",
                   minWidth: 120,
                   tagMap: {
-                    pending: { label: "待审核", tone: "warning" },
+                    pending: { label: "待核查", tone: "warning" },
                     escalated: { label: "升级复核", tone: "danger" },
-                    ready: { label: "可直接通过", tone: "success" },
+                    ready: { label: "可直接处置", tone: "success" },
                   },
                 },
                 {
@@ -103,32 +103,12 @@ export const initialEnvelope: WorkflowEnvelope = {
                 },
                 {
                   key: "amount",
-                  label: "申请金额",
+                  label: "关联金额",
                   type: "number",
                   format: "currency",
                   currency: "CNY",
                   align: "right",
                   minWidth: 140,
-                },
-                {
-                  key: "confidence",
-                  label: "置信度",
-                  type: "number",
-                  format: "percent",
-                  align: "right",
-                  minWidth: 120,
-                },
-                { key: "owner", label: "当前负责人", type: "text", minWidth: 120 },
-                {
-                  key: "priority",
-                  label: "优先级",
-                  type: "tag",
-                  minWidth: 110,
-                  tagMap: {
-                    p1: { label: "P1", tone: "danger" },
-                    p2: { label: "P2", tone: "warning" },
-                    p3: { label: "P3", tone: "info" },
-                  },
                 },
                 {
                   key: "updatedAt",
@@ -139,7 +119,7 @@ export const initialEnvelope: WorkflowEnvelope = {
                 },
                 {
                   key: "note",
-                  label: "审核备注",
+                  label: "备注",
                   type: "text",
                   minWidth: 280,
                   multiline: true,
@@ -165,40 +145,22 @@ export const initialEnvelope: WorkflowEnvelope = {
               ],
               rows: [
                 {
-                  caseId: "RV-20314",
-                  applicant: "Northwind Supply Co.",
+                  caseId: "WARN-REL-001",
+                  applicant: "华东星联贸易有限公司",
                   approvalStatus: "pending",
-                  riskLevel: "medium",
-                  amount: 328000,
-                  confidence: 0.82,
-                  owner: "李敏",
-                  priority: "p2",
-                  updatedAt: "2026-04-27T10:20:00+08:00",
-                  note: "该案件存在人工覆盖条件，建议在批准前补充政策声明确认材料。",
-                },
-                {
-                  caseId: "RV-20315",
-                  applicant: "Acme Logistics Asia",
-                  approvalStatus: "escalated",
                   riskLevel: "high",
-                  amount: 1245000,
-                  confidence: 0.64,
-                  owner: "张晨",
-                  priority: "p1",
-                  updatedAt: "2026-04-27T10:45:00+08:00",
-                  note: "历史交易次数较少，且供应商为首次接入对象，建议升级人工复核级别。",
+                  amount: 328000,
+                  updatedAt: "2026-04-28T09:20:00+08:00",
+                  note: "近 7 日交易频率明显异常，需结合受益人信息进一步核查。",
                 },
                 {
-                  caseId: "RV-20316",
-                  applicant: "Harbor Medical Devices",
-                  approvalStatus: "ready",
-                  riskLevel: "low",
-                  amount: 89600,
-                  confidence: 0.93,
-                  owner: "王蕾",
-                  priority: "p3",
-                  updatedAt: "2026-04-27T11:05:00+08:00",
-                  note: "材料完整，制裁筛查通过，可进入自动化后续流程。",
+                  caseId: "WARN-REL-002",
+                  applicant: "华东星联贸易有限公司",
+                  approvalStatus: "escalated",
+                  riskLevel: "medium",
+                  amount: 1245000,
+                  updatedAt: "2026-04-28T09:45:00+08:00",
+                  note: "历史交易对手存在高风险地区关联，建议升级复核。",
                 },
               ],
             },
@@ -207,8 +169,8 @@ export const initialEnvelope: WorkflowEnvelope = {
       },
       {
         id: "sec_main_review",
-        title: "审核清单",
-        description: "每一次交互都会产生工作流事件，并交由运行时处理。",
+        title: "核查方向",
+        description: "初始化后会由服务端 patch 回填核查建议，人工也可以继续追加核查方向。",
         components: [
           {
             id: "cmp_checklist",
@@ -219,33 +181,9 @@ export const initialEnvelope: WorkflowEnvelope = {
               },
               items: [
                 {
-                  id: "item_identity",
-                  label: "已核验供应商身份与注册信息",
-                  description: "将注册编号与权威数据源进行交叉比对。",
-                  checked: true,
-                },
-                {
-                  id: "item_override",
-                  label: "已审核人工覆盖原因说明",
-                  description: "确保例外处理原因已有文档记录。",
-                  checked: false,
-                },
-                {
-                  id: "item_policy",
-                  label: "已确认政策声明材料齐备",
-                  description: "在最终结论回传给智能体前必须完成此项确认。",
-                  checked: false,
-                },
-                {
-                  id: "item_bank",
-                  label: "已核验付款账户与开户主体一致",
-                  description: "确认付款账户名称、开户主体与合同主体一致。",
-                  checked: false,
-                },
-                {
-                  id: "item_contract",
-                  label: "已确认合同补充条款已归档",
-                  description: "补充协议、例外条款和审批意见均应留痕归档。",
+                  id: "item_placeholder",
+                  label: "等待服务端返回核查建议",
+                  description: "页面启动后将通过 init_event 更新为真实核查方向。",
                   checked: false,
                 },
               ],
@@ -256,10 +194,10 @@ export const initialEnvelope: WorkflowEnvelope = {
             type: "text_input",
             props: {
               eventType: "add_checklist_item",
-              label: "新增审核事项",
-              placeholder: "例如：确认付款账户与开户主体一致",
+              label: "新增核查方向",
+              placeholder: "例如：核验交易对手与受益人是否存在隐性关联",
               buttonLabel: "添加到清单",
-              helperText: "输入后会由运行时生成 patch，并把新的审核事项回写到当前 checklist。",
+              helperText: "输入后会由运行时生成 patch，并把新的核查方向回写到当前 checklist。",
               clearOnSubmit: true,
             },
           },
@@ -269,16 +207,10 @@ export const initialEnvelope: WorkflowEnvelope = {
             props: {
               actions: [
                 {
-                  label: "批准",
-                  eventType: "submit_decision",
-                  payload: { decision: "approve" },
+                  label: "执行核查",
+                  eventType: "Risk_Check_Event",
+                  payload: { decision: "execute" },
                   buttonType: "primary",
-                },
-                {
-                  label: "退回修改",
-                  eventType: "submit_decision",
-                  payload: { decision: "revise" },
-                  buttonType: "warning",
                 },
               ],
             },
@@ -288,16 +220,16 @@ export const initialEnvelope: WorkflowEnvelope = {
       {
         id: "sec_audit",
         title: "审计面板",
-        description: "智能体提取出的结构化事实，供人工审核参考。",
+        description: "智能体提取出的结构化事实，供人工核查参考。",
         components: [
           {
             id: "cmp_audit",
             type: "audit_panel",
             props: {
               records: [
-                { label: "材料覆盖率", value: "8 / 9 份文件", status: "warning" },
-                { label: "制裁名单筛查", value: "未命中", status: "success" },
-                { label: "历史例外次数", value: "过去 12 个月 2 次", status: "info" },
+                { label: "预警来源", value: "异常交易监测引擎", status: "info" },
+                { label: "命中规则数", value: "3 条", status: "warning" },
+                { label: "历史处置记录", value: "过去 12 个月 1 次", status: "success" },
               ],
             },
           },
