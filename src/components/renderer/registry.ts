@@ -1,3 +1,8 @@
+/**
+ * Widget 注册表。
+ * 把 Schema 中的 component type 映射到真实 Vue 组件，是 renderer 可扩展性的核心入口。
+ * 新增 widget 时通常需要同时修改类型定义、具体组件实现和这里的注册关系。
+ */
 import type { Component } from "vue";
 import type { WidgetType } from "../../types/workflow";
 import AlertWidget from "../widgets/AlertWidget.vue";

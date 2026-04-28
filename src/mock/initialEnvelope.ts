@@ -1,10 +1,16 @@
+/**
+ * 当前 demo 页面使用的 mock 工作流信封。
+ * 这里定义页面初始 schema、允许事件和示例数据，是理解交互效果的最快入口。
+ * 适合放演示数据和原型流程，不适合放正式业务逻辑。
+ */
 import type { WorkflowEnvelope } from "../types/workflow";
 
 export const initialEnvelope: WorkflowEnvelope = {
-  id: "wf_risk_review_001",
+  id: "wf_warning_review_001",
   version: "1.0.0",
   state: "reviewing",
   allowedEvents: [
+    "init_event",
     "toggle_check",
     "add_checklist_item",
     "submit_decision",
@@ -12,84 +18,47 @@ export const initialEnvelope: WorkflowEnvelope = {
   ],
   riskSummary: {
     level: "medium",
-    summary: "当前请求存在中等合规风险，需要审核人完成最终确认。",
+    summary: "当前存在一条待核查预警，建议先完成详情初始化与人工复核。",
     details: [
-      "该供应商为新接入对象，历史交易记录较少。",
-      "合同条款中包含两项人工覆盖条件。",
-      "材料包基本齐全，但仍缺少政策声明确认。",
+      "预警详情将在页面初始化时通过 init_event 回填。",
+      "核查过程中仍需结合审批列表与审核清单完成最终判断。",
     ],
   },
   messages: [
     {
       id: "msg_001",
-      role: "agent",
-      title: "智能体评估",
-      body: "初步审核已完成，请在最终批准前确认检查清单项。",
+      role: "system",
+      title: "工作台已启动",
+      body: "页面加载后将自动触发 init_event，并由服务端返回 patch 更新预警详情。",
       tone: "info",
       timestamp: "09:12",
     },
-    {
-      id: "msg_002",
-      role: "system",
-      title: "运行时提示",
-      body: "当前界面由工作流信封和 Schema 驱动渲染。",
-      tone: "success",
-      timestamp: "09:13",
-    },
   ],
   page: {
-    id: "page_risk_review",
-    title: "智能体审核工作台",
-    description:
-      "一个由 Schema 驱动的运行时界面，用于承接智能体决策、用户交互与 Patch 更新。",
+    id: "page_warning_review",
+    title: "预警核查工作台",
+    description: "一个由 Schema 驱动的预警核查运行时界面，用于承接初始化回填、人工核查与 Patch 更新。",
     sections: [
       {
         id: "sec_overview",
-        title: "请求概览",
-        description: "智能体为当前审核任务提供的关键上下文信息。",
+        title: "预警情况详情",
+        description: "该区域在页面启动后会通过 init_event 触发的 patch 回填。",
         components: [
           {
-            id: "cmp_intro",
-            type: "text",
-            props: {
-              content:
-                "这个工作台由工作流 Schema 驱动，而不是把业务逻辑写死在页面里。",
-              variant: "body",
-            },
-          },
-          {
-            id: "cmp_alert",
-            type: "alert",
-            props: {
-              title: "需要审核人关注",
-              description:
-                "检测到人工覆盖路径，因此智能体在完成最终处理前必须获得审核人确认。",
-              tone: "warning",
-            },
-          },
-          {
-            id: "cmp_kv",
+            id: "cmp_warning_detail",
             type: "key_value",
             props: {
               layout: "grid",
               columns: 3,
               minColumnWidth: 220,
               items: [
-                { label: "案件编号", value: "RV-20314" },
-                { label: "申请方", value: "Northwind Supply Co." },
-                { label: "智能体置信度", value: "0.82" },
-                { label: "风险等级", value: "中风险" },
-                { label: "审核阶段", value: "审核中" },
-                { label: "策略状态", value: "待确认" },
+                { label: "预警编号", value: "-" },
+                { label: "客户名称", value: "-" },
+                { label: "预警类型", value: "-" },
+                { label: "命中时间", value: "-" },
+                { label: "风险等级", value: "-" },
+                { label: "当前状态", value: "-" },
               ],
-            },
-          },
-          {
-            id: "cmp_badges",
-            type: "badge_list",
-            props: {
-              items: ["人工覆盖", "新供应商", "政策声明待补充"],
-              tone: "warning",
             },
           },
         ],
@@ -108,18 +77,8 @@ export const initialEnvelope: WorkflowEnvelope = {
               size: "default",
               emptyText: "暂无审批数据",
               columns: [
-                {
-                  key: "caseId",
-                  label: "案件编号",
-                  type: "text",
-                  minWidth: 140,
-                },
-                {
-                  key: "applicant",
-                  label: "申请方",
-                  type: "text",
-                  minWidth: 180,
-                },
+                { key: "caseId", label: "案件编号", type: "text", minWidth: 140 },
+                { key: "applicant", label: "申请方", type: "text", minWidth: 180 },
                 {
                   key: "approvalStatus",
                   label: "审批状态",
@@ -159,12 +118,7 @@ export const initialEnvelope: WorkflowEnvelope = {
                   align: "right",
                   minWidth: 120,
                 },
-                {
-                  key: "owner",
-                  label: "当前负责人",
-                  type: "text",
-                  minWidth: 120,
-                },
+                { key: "owner", label: "当前负责人", type: "text", minWidth: 120 },
                 {
                   key: "priority",
                   label: "优先级",

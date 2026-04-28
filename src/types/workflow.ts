@@ -1,3 +1,8 @@
+/**
+ * 项目核心协议定义。
+ * 这里描述运行时共享的数据模型，包括 Schema、Event、Patch 和 Envelope。
+ * 维护时优先在这里统一收敛类型，而不是让各层各自发明字段。
+ */
 export type WidgetType =
   | "text"
   | "text_input"
@@ -253,7 +258,7 @@ export interface WorkflowEnvelope {
 export type PatchOperation =
   | { op: "set_state"; value: WorkflowState }
   | { op: "replace_section"; sectionId: string; value: UISection }
-  | { op: "append_section"; value: UISection }
+  | { op: "append_section"; value: UISection; beforeSectionId?: string }
   | { op: "remove_section"; sectionId: string }
   | { op: "prepend_message"; value: WorkflowMessage }
   | { op: "set_allowed_events"; value: string[] }

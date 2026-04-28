@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { onMounted } from "vue";
 import WorkbenchLayout from "./components/layout/WorkbenchLayout.vue";
 import PageRenderer from "./components/renderer/PageRenderer.vue";
 import { useWorkflowRuntime } from "./composables/useWorkflowRuntime";
@@ -12,6 +13,17 @@ const {
   lastAppliedPatchCount,
   dispatchEvent,
 } = useWorkflowRuntime();
+
+onMounted(() => {
+  if (!envelope.value.allowedEvents.includes("init_event")) {
+    return;
+  }
+
+  void dispatchEvent({
+    type: "init_event",
+    componentId: "system_init",
+  });
+});
 </script>
 
 <template>

@@ -1,3 +1,8 @@
+/**
+ * 工作流运行时入口。
+ * 负责接收用户事件、调用 Patch Planner、应用 patches，并把最新 envelope 暴露给 UI。
+ * 业务状态流转应优先经过这里，不要在页面组件中直接维护平行业务状态。
+ */
 import { computed, ref } from "vue";
 import { MockPatchPlannerModel } from "../agent/MockPatchPlannerModel";
 import { RuntimePatchPlannerAgent } from "../agent/PatchPlannerAgent";
@@ -40,7 +45,6 @@ function createRuntimeMessage(
   };
 }
 
-// 当前 runtime 先接一个 mock planner，后续可以平滑替换成真实 Agent。
 const patchPlanner = new RuntimePatchPlannerAgent(
   new MockPatchPlannerModel(),
 );
