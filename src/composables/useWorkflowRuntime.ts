@@ -4,7 +4,7 @@
  * 业务状态流转应优先经过这里，不要在页面组件中直接维护平行业务状态。
  */
 import { computed, ref } from "vue";
-import { MockPatchPlannerModel } from "../agent/MockPatchPlannerModel";
+import { HttpPatchPlannerModel } from "../agent/HttpPatchPlannerModel";
 import { RuntimePatchPlannerAgent } from "../agent/PatchPlannerAgent";
 import { initialEnvelope } from "../mock/initialEnvelope";
 import type {
@@ -46,7 +46,7 @@ function createRuntimeMessage(
 }
 
 const patchPlanner = new RuntimePatchPlannerAgent(
-  new MockPatchPlannerModel(),
+  new HttpPatchPlannerModel(),
 );
 
 export function useWorkflowRuntime() {

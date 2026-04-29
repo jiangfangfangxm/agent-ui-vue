@@ -74,8 +74,8 @@ def build_init_event_patches(
 ) -> List[Dict[str, Any]]:
     runtime_event = RuntimeEvent.from_dict(event)
     warning_detail_items = warning_detail_items or [
-        {"label": "预警编号", "value": "WARN-20260428-017"},
-        {"label": "客户名称", "value": "华东星联贸易有限公司"},
+        {"label": "预警编号", "value": "WARN-20260428-028"},
+        {"label": "客户名称", "value": "建行---华东星联贸易有限公司"},
         {"label": "预警类型", "value": "高频异常交易预警"},
         {"label": "命中时间", "value": "2026-04-28 09:03"},
         {"label": "风险等级", "value": "高风险"},
