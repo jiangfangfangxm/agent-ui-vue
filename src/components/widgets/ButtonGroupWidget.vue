@@ -13,7 +13,7 @@ const emit = defineEmits<{
 }>();
 
 const { isEventAllowed, dispatch } = useWidgetEvents(
-  props.runtime,
+  () => props.runtime,
   emit,
   props.component.id,
 );
@@ -31,7 +31,7 @@ function trigger(eventType: string, payload?: Record<string, unknown>): void {
       :type="action.buttonType ?? 'primary'"
       size="large"
       :loading="runtime.isDispatching && isEventAllowed(action.eventType)"
-      :disabled="runtime.isDispatching"
+      :disabled="runtime.isDispatching || !isEventAllowed(action.eventType)"
       @click="trigger(action.eventType, action.payload)"
     >
       {{ action.label }}

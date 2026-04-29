@@ -37,6 +37,7 @@ onMounted(() => {
     :messages="envelope.messages"
     :events="eventLog"
     :risk-summary="envelope.riskSummary"
+    :allowed-events="envelope.allowedEvents"
   >
     <PageRenderer
       :page="envelope.page"

@@ -15,7 +15,7 @@ const emit = defineEmits<{
 
 const draft = ref("");
 const { canDispatch, dispatch } = useWidgetEvents(
-  props.runtime,
+  () => props.runtime,
   emit,
   props.component.id,
 );

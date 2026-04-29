@@ -19,6 +19,7 @@ defineProps<{
   messages: WorkflowMessage[];
   events: WorkflowEvent[];
   riskSummary: WorkflowRiskSummary;
+  allowedEvents: string[];
 }>();
 </script>
 
@@ -55,6 +56,22 @@ defineProps<{
         <EventLogPanel :events="events" :risk-summary="riskSummary" />
       </aside>
     </div>
+
+    <div class="debug-allowed-events">
+      <p class="debug-title">Allowed Events</p>
+      <div class="debug-tags">
+        <el-tag
+          v-for="eventType in allowedEvents"
+          :key="eventType"
+          size="small"
+          type="info"
+          effect="plain"
+        >
+          {{ eventType }}
+        </el-tag>
+        <span v-if="allowedEvents.length === 0" class="debug-empty">none</span>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -76,6 +93,40 @@ defineProps<{
   align-items: start;
 }
 
+.debug-allowed-events {
+  position: fixed;
+  right: 20px;
+  bottom: 20px;
+  z-index: 20;
+  max-width: min(420px, calc(100vw - 40px));
+  padding: 12px 14px;
+  border: 1px solid #d6deeb;
+  border-radius: 16px;
+  background: rgb(255 255 255 / 92%);
+  backdrop-filter: blur(10px);
+  box-shadow: 0 10px 24px rgb(15 23 42 / 0.10);
+}
+
+.debug-title {
+  margin: 0 0 10px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: #52606d;
+  text-transform: uppercase;
+}
+
+.debug-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.debug-empty {
+  font-size: 13px;
+  color: #8a97a6;
+}
+
 .side-column,
 .center-column {
   min-width: 0;
@@ -84,6 +135,13 @@ defineProps<{
 @media (max-width: 1180px) {
   .workbench-body {
     grid-template-columns: 1fr;
+  }
+
+  .debug-allowed-events {
+    left: 20px;
+    right: 20px;
+    bottom: 16px;
+    max-width: none;
   }
 }
 </style>

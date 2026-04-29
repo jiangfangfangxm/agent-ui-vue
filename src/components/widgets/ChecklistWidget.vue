@@ -12,7 +12,11 @@ const emit = defineEmits<{
   dispatch: [event: WorkflowEventInput];
 }>();
 
-const { dispatch } = useWidgetEvents(props.runtime, emit, props.component.id);
+const { canDispatch, dispatch } = useWidgetEvents(
+  () => props.runtime,
+  emit,
+  props.component.id,
+);
 
 function toggle(itemId: string): void {
   dispatch(props.component.props.action.eventType, { itemId });
@@ -28,8 +32,8 @@ function toggle(itemId: string): void {
     >
       <el-checkbox
         :model-value="item.checked"
-        :disabled="runtime.isDispatching"
-        @change="toggle(item.id)"
+        :disabled="!canDispatch(component.props.action.eventType)"
+        @update:model-value="toggle(item.id)"
       >
         <span class="check-label">{{ item.label }}</span>
       </el-checkbox>
