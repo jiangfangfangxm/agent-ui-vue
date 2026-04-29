@@ -2,10 +2,10 @@
 
 一个基于 `Vue 3 + Element Plus + TypeScript` 的 **Agent 驱动 UI Runtime Engine** 示例项目。
 
-当前仓库里的主示例已经演进为 **预警核查工作台**。它不是传统的“前端页面自己维护业务状态”的实现方式，而是把界面演化拆成一条明确的运行链路：
+当前仓库的主示例已经演进为 **预警核查工作台**。它不是传统的“前端页面自己维护业务状态”，而是把界面演化拆成一条明确的运行链路：
 
 ```text
-用户交互 / 页面初始化
+页面初始化 / 用户交互
 -> WorkflowEvent
 -> Runtime
 -> Patch Planner Agent
@@ -19,14 +19,14 @@
 也就是说：
 
 - UI 由 Schema 驱动
-- 用户动作先变成 `WorkflowEvent`
+- 页面动作先变成 `WorkflowEvent`
 - Agent / Planner 根据上下文生成 `PatchOperation[]`
 - Runtime 统一应用 patch
 - Vue 根据新的 `WorkflowEnvelope` 自动重渲染
 
 ## 项目目标
 
-构建一套可扩展的 Agent-driven UI Runtime，用于支持这类流程：
+构建一套可扩展的 Agent-driven UI Runtime，用于支持如下流程：
 
 ```text
 Agent -> UI Schema -> Renderer -> UI -> User Interaction -> Event -> Agent -> Patch -> UI Update
@@ -35,10 +35,10 @@ Agent -> UI Schema -> Renderer -> UI -> User Interaction -> Event -> Agent -> Pa
 当前示例聚焦在“预警核查”场景，包括：
 
 - 页面启动时自动触发初始化事件
-- 服务端返回 patch 回填预警详情
-- 展示后台建议的核查方向
+- 服务端通过 patch 回填预警详情
+- 下发后台建议的核查方向
 - 支持人工补充核查方向
-- 执行风险核查后生成报告区
+- 执行核查后生成核查报告
 
 ## 当前示例能力
 
@@ -47,11 +47,59 @@ Agent -> UI Schema -> Renderer -> UI -> User Interaction -> Event -> Agent -> Pa
 - `WorkflowEnvelope` 驱动整页渲染
 - Page / Section / Component 分层 renderer
 - registry 驱动 widget 映射
-- `useWorkflowRuntime()` 统一承接事件和状态流转
+- `useWorkflowRuntime()` 统一承接事件与状态流转
 - `PatchOperation[]` 驱动 UI 增量更新
 - `MockPatchPlannerModel` 模拟服务端 / Agent 生成 patch
-- 页面启动自动触发 `init_event`
-- “执行核查”触发 `Risk_Check_Event` 并生成核查报告
+- Python 版 patch builder，便于 Agent 调用与测试
+
+## 动态 allowedEvents 生命周期
+
+当前项目已经改成“**最小启动事件 + 初始化后动态下发真实事件**”的模式。
+
+### 启动前
+
+[src/mock/initialEnvelope.ts](C:/Users/PC/Documents/Codex/2026-04-24/github/agent-ui-vue/src/mock/initialEnvelope.ts) 里只保留：
+
+```ts
+allowedEvents: ["init_event"]
+```
+
+这意味着页面刚启动时，前端只允许触发初始化事件，避免在真实数据尚未回填前误触发业务交互。
+
+### 初始化中
+
+[src/App.vue](C:/Users/PC/Documents/Codex/2026-04-24/github/agent-ui-vue/src/App.vue) 挂载后会自动触发：
+
+```text
+init_event
+```
+
+`useWorkflowRuntime()` 会把它交给 planner，再由 planner 返回初始化 patch。
+
+### 初始化完成后
+
+[src/agent/MockPatchPlannerModel.ts](C:/Users/PC/Documents/Codex/2026-04-24/github/agent-ui-vue/src/agent/MockPatchPlannerModel.ts) 和 Python 端 [python/agent_patch_builders/workflow_action_builders.py](C:/Users/PC/Documents/Codex/2026-04-24/github/agent-ui-vue/python/agent_patch_builders/workflow_action_builders.py) 都会在 `init_event` 的 patch 里下发真正可用的事件：
+
+- `toggle_check`
+- `add_checklist_item`
+- `Risk_Check_Event`
+- `open_detail`
+
+对应 patch 语义是：
+
+```text
+set_allowed_events([...真实可用事件...])
+```
+
+### 后续阶段
+
+后续事件仍可继续通过 patch 调整 `allowedEvents`。例如执行核查完成后，当前 mock 会把事件白名单收紧为空，表示本轮核查已结束。
+
+这套设计的价值在于：
+
+- 启动阶段更安全
+- 交互权限更贴近工作流状态
+- 未来接真实后端时，可以由服务端统一控制当前可用动作
 
 ## 技术栈
 
@@ -59,6 +107,7 @@ Agent -> UI Schema -> Renderer -> UI -> User Interaction -> Event -> Agent -> Pa
 - TypeScript
 - Element Plus
 - Vite
+- Python patch builders
 
 ## 快速开始
 
@@ -84,6 +133,12 @@ npm run dev
 npm run build
 ```
 
+### 4. Python patch-builder 测试
+
+```bash
+python -m unittest discover -s python/tests -p "test_*.py"
+```
+
 ## 当前页面结构
 
 当前 mock 页面主要由这些 section 组成：
@@ -91,29 +146,28 @@ npm run build
 ### 1. 预警情况详情
 
 - 只有一个 `key_value` widget
-- 页面初始时先显示占位值
-- `App.vue` 挂载后自动触发 `init_event`
-- `MockPatchPlannerModel` 模拟服务端返回 patch
-- patch 会更新该 section 的 KV 内容
+- 初始时只显示占位内容
+- 页面启动后自动触发 `init_event`
+- 服务端返回 patch 后，回填真实预警详情
 
 ### 2. 关联台账
 
 - 使用 `data_table` 展示与预警相关的关联案件 / 台账信息
-- 支持状态列、金额列、操作列
+- 支持状态列、金额列、时间列、链接列、操作列
 - “查看详情”会触发 `open_detail`
 
 ### 3. 核查方向
 
 - 使用 `checklist` 展示后台返回的核查建议
-- 支持手动新增核查方向
-- “新增核查方向”仍然通过 patch 回写 checklist
+- 支持人工新增核查方向
+- “新增核查方向”通过 patch 回写 checklist
 - 主按钮为“执行核查”
 - 点击后触发 `Risk_Check_Event`
 
 ### 4. 核查报告
 
-- 由 `Risk_Check_Event` 返回 patch 生成
-- 当前用一个 `text` widget` 展示核查报告正文
+- 由 `Risk_Check_Event` 返回 patch 动态生成
+- 当前使用一个 `text` widget 展示核查报告正文
 
 ## 目录结构
 
@@ -146,6 +200,10 @@ src/
     layout/
     renderer/
     widgets/
+
+python/
+  agent_patch_builders/
+  tests/
 
 docs/
   Agent.md
@@ -205,14 +263,13 @@ Patch Planner Agent 不直接渲染界面，而是：
 
 ## 当前示例交互
 
-当前预警核查工作台中，主要交互包括：
-
 ### 页面初始化
 
 - 页面挂载后自动触发 `init_event`
-- 服务端 mock 返回 patch
-- 更新“预警情况详情”
-- 更新“核查方向”
+- planner 返回 patch
+- 回填“预警情况详情”
+- 回填“核查方向”
+- 通过 `set_allowed_events` 开放真正可用的交互事件
 
 ### 核查方向勾选
 
@@ -227,25 +284,25 @@ Patch Planner Agent 不直接渲染界面，而是：
 ### 执行核查
 
 - 点击“执行核查”触发 `Risk_Check_Event`
-- 服务端 mock 返回 patch
+- 服务端返回 patch
 - 在报告 section 的 `text` 控件中显示核查结果
 
 ## 为什么这个架构重要
 
-相对于传统前端直接写业务状态判断，这个项目的优势在于：
+相对传统前端直接写业务状态判断，这个项目的优势在于：
 
 - 前端组件不直接做业务状态迁移
 - Agent / Planner 可以基于上下文和事件生成 UI patch
 - UI 更新是增量的，而不是整页重建
 - Runtime、Renderer、Widget、Patch Engine 分层清晰
-- 后续接真实后端 Agent 更自然
+- 后续接真实后端 / Python Agent 更自然
 
 ## 后续扩展方向
 
 适合继续做的方向包括：
 
 - 接入真实 `PatchPlannerModel`
-- 为 `applyPatches()` 与 planner 增加测试
+- 为 `applyPatches()` 和 planner 增加测试
 - 把核查报告从单一 `text` 组件拆成更结构化的 section
 - 支持更多 schema / widget 类型
 - 增加回放、审计和追踪能力
@@ -253,5 +310,5 @@ Patch Planner Agent 不直接渲染界面，而是：
 ## 相关文档
 
 - Agent 设计说明：[docs/Agent.md](C:/Users/PC/Documents/Codex/2026-04-24/github/agent-ui-vue/docs/Agent.md)
-- 交接说明：[HANDOVER.md](C:/Users/PC/Documents/Codex/2026-04-24/github/agent-ui-vue/HANDOVER.md)
+- 项目交接说明：[HANDOVER.md](C:/Users/PC/Documents/Codex/2026-04-24/github/agent-ui-vue/HANDOVER.md)
 - Skill 规范：[docs/skills/workflow-patch-generation/SKILL.md](C:/Users/PC/Documents/Codex/2026-04-24/github/agent-ui-vue/docs/skills/workflow-patch-generation/SKILL.md)

@@ -229,6 +229,12 @@ function buildReviewDirectionSection(): UISection {
               payload: { action: "execute" },
               buttonType: "primary",
             },
+            {
+              label: "Save核查",
+              eventType: "Risk_Check_Event",
+              payload: { action: "execute" },
+              buttonType: "second",
+            },
           ],
         },
       },
@@ -340,7 +346,12 @@ function handleInitEvent(
     },
     {
       op: "set_allowed_events",
-      value: envelope.allowedEvents.filter((eventType) => eventType !== "init_event"),
+      value: [
+        "toggle_check",
+        "add_checklist_item",
+        "Risk_Check_Event",
+        "open_detail",
+      ],
     },
     {
       op: "set_risk_summary",

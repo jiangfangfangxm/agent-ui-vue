@@ -1,7 +1,7 @@
 /**
  * 当前 demo 页面使用的 mock 工作流信封。
- * 这里定义页面初始 schema、允许事件和示例数据，是理解交互效果的最快入口。
- * 适合放演示数据和原型流程，不适合放正式业务逻辑。
+ * 这里定义页面初始 schema、最小启动事件和占位内容。
+ * 真正的预警详情、核查方向以及后续交互能力，会在 init_event 后通过 patch 回填。
  */
 import type { WorkflowEnvelope } from "../types/workflow";
 
@@ -9,19 +9,13 @@ export const initialEnvelope: WorkflowEnvelope = {
   id: "wf_warning_review_001",
   version: "1.0.0",
   state: "reviewing",
-  allowedEvents: [
-    "init_event",
-    "toggle_check",
-    "add_checklist_item",
-    "Risk_Check_Event",
-    "open_detail",
-  ],
+  allowedEvents: ["init_event"],
   riskSummary: {
     level: "medium",
-    summary: "当前存在一条待核查预警，建议先完成详情初始化与人工复核。",
+    summary: "页面已启动，正在等待初始化预警数据。",
     details: [
-      "预警详情将在页面初始化时通过 init_event 回填。",
-      "核查方向将由服务端建议并写入核查清单。",
+      "系统将自动触发 init_event。",
+      "初始化完成后会下发真正可用的交互事件。",
     ],
   },
   messages: [
@@ -209,7 +203,7 @@ export const initialEnvelope: WorkflowEnvelope = {
                 {
                   label: "执行核查",
                   eventType: "Risk_Check_Event",
-                  payload: { decision: "execute" },
+                  payload: { action: "execute" },
                   buttonType: "primary",
                 },
               ],

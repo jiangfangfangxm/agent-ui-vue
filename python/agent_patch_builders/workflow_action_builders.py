@@ -112,7 +112,7 @@ def build_init_event_patches(
         build_replace_section_patch("sec_overview", build_warning_detail_section(warning_detail_items)),
         build_replace_section_patch("sec_main_review", build_review_direction_section(review_direction_items)),
         build_set_allowed_events_patch(
-            [name for name in envelope["allowedEvents"] if name != "init_event"]
+            ["toggle_check", "add_checklist_item", "Risk_Check_Event", "open_detail"]
         ),
         build_set_risk_summary_patch(
             build_risk_summary(
