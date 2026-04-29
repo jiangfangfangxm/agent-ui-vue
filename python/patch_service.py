@@ -5,7 +5,9 @@ from __future__ import annotations
 import json
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from typing import Any, Dict, List
+from typing import Any, Dict
+
+from agent_patch_builders.logging_utils import configure_logging, get_logger
 
 from agent_patch_builders.workflow_action_builders import (
     build_add_checklist_item_patches,
@@ -15,11 +17,20 @@ from agent_patch_builders.workflow_action_builders import (
     build_toggle_checklist_item_patches,
 )
 
+logger = get_logger("patch_service")
+
 
 def build_patch_plan(payload: Dict[str, Any]) -> Dict[str, Any]:
     envelope = payload["envelope"]
     event = payload["event"]
     event_type = str(event["type"])
+    logger.info(
+        "Received patch planning request: event_type=%s event_id=%s state=%s allowed_events=%s",
+        event_type,
+        event.get("id"),
+        envelope.get("state"),
+        envelope.get("allowedEvents", []),
+    )
 
     if event_type == "init_event":
         patches = build_init_event_patches(envelope=envelope, event=event)
@@ -43,10 +54,15 @@ def build_patch_plan(payload: Dict[str, Any]) -> Dict[str, Any]:
     else:
         raise ValueError(f"Unsupported event type: {event_type}")
 
+    logger.info(
+        "Patch plan built: event_type=%s patch_count=%s",
+        event_type,
+        len(patches),
+    )
     return {
-      "patches": patches,
-      "rationale": f"Python patch service generated {len(patches)} patch operations for event '{event_type}'.",
-      "warnings": [],
+        "patches": patches,
+        "rationale": f"Python patch service generated {len(patches)} patch operations for event '{event_type}'.",
+        "warnings": [],
     }
 
 
@@ -60,6 +76,7 @@ class PatchServiceHandler(BaseHTTPRequestHandler):
 
     def do_GET(self) -> None:  # noqa: N802
         if self.path == "/health":
+            logger.debug("Health check requested")
             self._write_json(
                 HTTPStatus.OK,
                 {
@@ -86,26 +103,31 @@ class PatchServiceHandler(BaseHTTPRequestHandler):
             content_length = int(self.headers.get("Content-Length", "0"))
             raw_body = self.rfile.read(content_length)
             payload = json.loads(raw_body.decode("utf-8"))
+            logger.debug("Raw request body parsed successfully")
             result = build_patch_plan(payload)
         except KeyError as error:
+            logger.exception("Patch service request missing required field")
             self._write_json(
                 HTTPStatus.BAD_REQUEST,
                 {"error": f"Missing required field: {error}"},
             )
             return
         except ValueError as error:
+            logger.exception("Patch service request validation failed")
             self._write_json(
                 HTTPStatus.BAD_REQUEST,
                 {"error": str(error)},
             )
             return
         except json.JSONDecodeError:
+            logger.exception("Patch service received invalid JSON")
             self._write_json(
                 HTTPStatus.BAD_REQUEST,
                 {"error": "Invalid JSON body"},
             )
             return
         except Exception as error:  # noqa: BLE001
+            logger.exception("Patch service encountered an unexpected error")
             self._write_json(
                 HTTPStatus.INTERNAL_SERVER_ERROR,
                 {"error": f"Patch service failed: {error}"},
@@ -133,8 +155,9 @@ class PatchServiceHandler(BaseHTTPRequestHandler):
 
 
 def run(host: str = "127.0.0.1", port: int = 8000) -> None:
+    configure_logging()
     server = ThreadingHTTPServer((host, port), PatchServiceHandler)
-    print(f"Python patch service listening on http://{host}:{port}")
+    logger.info("Python patch service listening on http://%s:%s", host, port)
     server.serve_forever()
 
 

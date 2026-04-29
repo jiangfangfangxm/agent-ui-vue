@@ -102,7 +102,7 @@ class PatchBuilderTests(unittest.TestCase):
         )
 
         self.assertEqual(overview["title"], "预警情况详情")
-        self.assertEqual(overview["components"][0]["props"]["items"][0]["value"], "WARN-20260428-017")
+        self.assertEqual(overview["components"][0]["props"]["items"][0]["value"], "WARN-20260428-028")
         self.assertGreater(len(review["components"][0]["props"]["items"]), 1)
         self.assertNotIn("init_event", next_envelope["allowedEvents"])
 

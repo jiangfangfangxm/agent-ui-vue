@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, Iterable, List, Optional
 
+from .logging_utils import get_logger
 from .message_builders import build_message
 from .models import ChecklistItemDict, RuntimeEvent, clone
 from .patch_helpers import (
@@ -21,6 +22,8 @@ from .section_builders import (
     build_warning_detail_section,
 )
 from .summary_builders import build_risk_summary
+
+logger = get_logger("workflow_action_builders")
 
 
 def _find_section(envelope: Dict[str, Any], section_id: str) -> Optional[Dict[str, Any]]:
@@ -73,6 +76,11 @@ def build_init_event_patches(
     review_direction_items: Optional[Iterable[ChecklistItemDict]] = None,
 ) -> List[Dict[str, Any]]:
     runtime_event = RuntimeEvent.from_dict(event)
+    logger.info(
+        "Processing init_event: event_id=%s current_allowed_events=%s",
+        runtime_event.id,
+        envelope.get("allowedEvents", []),
+    )
     warning_detail_items = warning_detail_items or [
         {"label": "预警编号", "value": "WARN-20260428-028"},
         {"label": "客户名称", "value": "建行---华东星联贸易有限公司"},
@@ -107,6 +115,12 @@ def build_init_event_patches(
             "checked": False,
         },
     ])
+
+    logger.debug(
+        "Init payload prepared: warning_items=%s review_direction_items=%s",
+        len(warning_detail_items),
+        len(review_direction_items),
+    )
 
     return [
         build_replace_section_patch("sec_overview", build_warning_detail_section(warning_detail_items)),
@@ -147,9 +161,18 @@ def build_toggle_checklist_item_patches(
     section = clone(_find_section(envelope, "sec_main_review"))
     checklist = _find_checklist_component(envelope)
     if not section or not checklist:
+        logger.warning(
+            "toggle_check skipped: section_or_checklist_missing event_id=%s",
+            runtime_event.id,
+        )
         return []
 
     item_id = str((runtime_event.payload or {}).get("itemId", ""))
+    logger.info(
+        "Processing toggle_check: event_id=%s item_id=%s",
+        runtime_event.id,
+        item_id,
+    )
     next_items = [
         {**item, "checked": not item.get("checked", False)} if item["id"] == item_id else item
         for item in checklist["props"]["items"]
@@ -184,8 +207,19 @@ def build_add_checklist_item_patches(
     normalized_label = str((runtime_event.payload or {}).get("label", "")).strip()
     section = clone(_find_section(envelope, "sec_main_review"))
     checklist = _find_checklist_component(envelope)
+    logger.info(
+        "Processing add_checklist_item: event_id=%s label=%s",
+        runtime_event.id,
+        normalized_label,
+    )
 
     if not section or not checklist or not normalized_label:
+        logger.warning(
+            "add_checklist_item rejected: invalid_input event_id=%s has_section=%s has_checklist=%s",
+            runtime_event.id,
+            bool(section),
+            bool(checklist),
+        )
         return [
             build_prepend_message_patch(
                 build_message(
@@ -204,6 +238,11 @@ def build_add_checklist_item_patches(
         for item in checklist["props"]["items"]
     )
     if exists:
+        logger.warning(
+            "add_checklist_item rejected: duplicate_label event_id=%s label=%s",
+            runtime_event.id,
+            normalized_label,
+        )
         return [
             build_prepend_message_patch(
                 build_message(
@@ -257,6 +296,12 @@ def build_risk_check_event_patches(
     report_text: Optional[str] = None,
 ) -> List[Dict[str, Any]]:
     runtime_event = RuntimeEvent.from_dict(event)
+    logger.info(
+        "Processing Risk_Check_Event: event_id=%s checked_items=%s unchecked_items=%s",
+        runtime_event.id,
+        len(_checked_items(envelope)),
+        len(_unchecked_items(envelope)),
+    )
     report_text = report_text or "\n".join(
         [
             "风险核查报告",
@@ -286,6 +331,12 @@ def build_risk_check_event_patches(
 
     report_section = build_risk_check_report_section(report_text)
     exists = _find_section(envelope, "sec_review_report") is not None
+    logger.debug(
+        "Risk check report prepared: event_id=%s report_exists=%s report_length=%s",
+        runtime_event.id,
+        exists,
+        len(report_text),
+    )
 
     patches: List[Dict[str, Any]] = [build_set_state_patch("presenting_result")]
     if exists:
@@ -329,6 +380,13 @@ def build_open_detail_patches(
     case_id = str(payload.get("caseId", "-"))
     applicant = str(payload.get("applicant", "-"))
     amount = str(payload.get("amount", "-"))
+    logger.info(
+        "Processing open_detail: event_id=%s case_id=%s applicant=%s amount=%s",
+        runtime_event.id,
+        case_id,
+        applicant,
+        amount,
+    )
 
     return [
         build_prepend_message_patch(

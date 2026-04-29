@@ -185,6 +185,41 @@ cd C:\Users\PC\Documents\Codex\2026-04-24\github\agent-ui-vue\python
 python patch_service.py
 ```
 
+### 日志调试
+
+Python patch 服务已经内置了日志输出，默认日志级别为 `INFO`。
+
+直接启动时，你会看到类似这些信息：
+
+- 收到的事件类型
+- 事件 id
+- 当前 workflow state
+- 当前 allowedEvents
+- 生成了多少个 patch
+- 参数校验或异常错误
+
+如果你想看更详细的调试日志，可以在启动前设置环境变量：
+
+```powershell
+cd C:\Users\PC\Documents\Codex\2026-04-24\github\agent-ui-vue\python
+$env:PATCH_SERVICE_LOG_LEVEL="DEBUG"
+python patch_service.py
+```
+
+`DEBUG` 模式下会额外输出：
+
+- 初始化回填时的条目数量
+- 风险核查报告长度
+- 健康检查请求
+- 请求体解析成功提示
+- builder 处理分支的更多细节
+
+如果想恢复默认日志级别，关闭当前终端重新打开即可，或者显式设置：
+
+```powershell
+$env:PATCH_SERVICE_LOG_LEVEL="INFO"
+```
+
 ### 健康检查
 
 可以单独验证 Python 服务是否已经启动：

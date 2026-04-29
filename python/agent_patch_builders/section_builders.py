@@ -63,6 +63,12 @@ def build_review_direction_section(items: Iterable[ChecklistItemDict]) -> Dict[s
                             "eventType": "Risk_Check_Event",
                             "payload": {"action": "execute"},
                             "buttonType": "primary",
+                        },
+                        {
+                            "label": "Save 核查",
+                            "eventType": "Risk_Check_Event",
+                            "payload": {"action": "execute"},
+                            "buttonType": "primary",
                         }
                     ]
                 },
