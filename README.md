@@ -139,6 +139,96 @@ npm run build
 python -m unittest discover -s python/tests -p "test_*.py"
 ```
 
+## 本地联调 Python patch 服务
+
+当前前端已经接入本地 HTTP 版 Python patch 服务，用于让 `init_event`、`add_checklist_item`、`Risk_Check_Event` 等事件真正走 Python patch-builder。
+
+### 联调结构
+
+```text
+浏览器
+-> Vite 前端 (5173)
+-> /api/patch-plan
+-> Vite 代理
+-> Python patch service (8000)
+-> agent_patch_builders
+-> 返回 PatchPlanningOutput
+-> 前端 applyPatches()
+```
+
+### 当前配置
+
+- 前端 planner 实现：
+  - [src/agent/HttpPatchPlannerModel.ts](C:/Users/PC/Documents/Codex/2026-04-24/github/agent-ui-vue/src/agent/HttpPatchPlannerModel.ts)
+- 前端运行时接线：
+  - [src/composables/useWorkflowRuntime.ts](C:/Users/PC/Documents/Codex/2026-04-24/github/agent-ui-vue/src/composables/useWorkflowRuntime.ts)
+- Vite 代理配置：
+  - [vite.config.ts](C:/Users/PC/Documents/Codex/2026-04-24/github/agent-ui-vue/vite.config.ts)
+- Python 本地服务入口：
+  - [python/patch_service.py](C:/Users/PC/Documents/Codex/2026-04-24/github/agent-ui-vue/python/patch_service.py)
+
+### 启动方式
+
+需要同时启动两个进程。
+
+终端 1：启动前端
+
+```powershell
+cd C:\Users\PC\Documents\Codex\2026-04-24\github\agent-ui-vue
+npm run dev
+```
+
+终端 2：启动 Python patch 服务
+
+```powershell
+cd C:\Users\PC\Documents\Codex\2026-04-24\github\agent-ui-vue\python
+python patch_service.py
+```
+
+### 健康检查
+
+可以单独验证 Python 服务是否已经启动：
+
+```powershell
+curl http://127.0.0.1:8000/health
+```
+
+如果正常，会返回服务状态信息。
+
+### 联调说明
+
+- 页面加载后会自动触发 `init_event`
+- `init_event` 会通过 `/api/patch-plan` 打到 Python 服务
+- Python 服务会调用 `build_init_event_patches(...)`
+- 返回的 patch 会继续由前端 `applyPatches()` 应用到页面
+
+后续这些事件也会走同一条链路：
+
+- `toggle_check`
+- `add_checklist_item`
+- `Risk_Check_Event`
+- `open_detail`
+
+### 常见问题
+
+#### 1. 只启动了 Vite，没有启动 Python 服务
+
+这时页面上的初始化或交互事件会请求失败，因为 `/api/patch-plan` 没有后端响应。
+
+#### 2. Python 服务端口不是 8000
+
+如果你修改了 Python 服务端口，需要同步修改 [vite.config.ts](C:/Users/PC/Documents/Codex/2026-04-24/github/agent-ui-vue/vite.config.ts) 里的代理目标地址。
+
+#### 3. 想直接调用 Python patch-builder 做离线验证
+
+可以继续使用：
+
+```powershell
+python -m unittest discover -s python/tests -p "test_*.py"
+```
+
+这适合验证 patch-builder 函数本身，不依赖前端页面。
+
 ## 当前页面结构
 
 当前 mock 页面主要由这些 section 组成：
