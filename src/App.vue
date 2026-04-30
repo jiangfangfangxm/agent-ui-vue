@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted } from "vue";
+import { computed, onMounted } from "vue";
 import WorkbenchLayout from "./components/layout/WorkbenchLayout.vue";
 import PageRenderer from "./components/renderer/PageRenderer.vue";
 import { useWorkflowRuntime } from "./composables/useWorkflowRuntime";
@@ -13,6 +13,23 @@ const {
   lastAppliedPatchCount,
   dispatchEvent,
 } = useWorkflowRuntime();
+
+const actionPlanDebug = computed(() => {
+  const section = envelope.value.page.sections.find(
+    (item) => item.id === "sec_action_plan",
+  );
+  const checklist = section?.components.find(
+    (item) => item.type === "checklist",
+  );
+  const items =
+    checklist?.type === "checklist" ? checklist.props.items : [];
+
+  return {
+    count: items.length,
+    checkedCount: items.filter((item) => item.checked).length,
+    labels: items.map((item) => item.label),
+  };
+});
 
 onMounted(() => {
   if (!envelope.value.allowedEvents.includes("init_event")) {
@@ -38,6 +55,7 @@ onMounted(() => {
     :events="eventLog"
     :risk-summary="envelope.riskSummary"
     :allowed-events="envelope.allowedEvents"
+    :action-plan-debug="actionPlanDebug"
   >
     <PageRenderer
       :page="envelope.page"

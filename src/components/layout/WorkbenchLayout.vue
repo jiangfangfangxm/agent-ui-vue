@@ -20,6 +20,11 @@ defineProps<{
   events: WorkflowEvent[];
   riskSummary: WorkflowRiskSummary;
   allowedEvents: string[];
+  actionPlanDebug: {
+    count: number;
+    checkedCount: number;
+    labels: string[];
+  };
 }>();
 </script>
 
@@ -71,6 +76,15 @@ defineProps<{
         </el-tag>
         <span v-if="allowedEvents.length === 0" class="debug-empty">none</span>
       </div>
+      <div class="debug-divider" />
+      <p class="debug-title">Action Plan Debug</p>
+      <p class="debug-line">
+        count: {{ actionPlanDebug.count }} / checked: {{ actionPlanDebug.checkedCount }}
+      </p>
+      <p class="debug-line">
+        labels:
+        {{ actionPlanDebug.labels.length ? actionPlanDebug.labels.join("、") : "none" }}
+      </p>
     </div>
   </div>
 </template>
@@ -79,6 +93,7 @@ defineProps<{
 .workbench-shell {
   min-height: 100vh;
   padding: 24px;
+  padding-bottom: 160px;
 }
 
 .runtime-alert {
@@ -120,6 +135,20 @@ defineProps<{
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+}
+
+.debug-divider {
+  height: 1px;
+  margin: 12px 0 10px;
+  background: #e5ebf5;
+}
+
+.debug-line {
+  margin: 4px 0 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: #52606d;
+  word-break: break-word;
 }
 
 .debug-empty {

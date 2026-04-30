@@ -18,16 +18,22 @@ const { canDispatch, dispatch } = useWidgetEvents(
   props.component.id,
 );
 
+function getChecklistKey(): string {
+  return props.component.props.items
+    .map((item) => `${item.id}:${item.label}:${item.checked ? "1" : "0"}`)
+    .join("|");
+}
+
 function toggle(itemId: string): void {
   dispatch(props.component.props.action.eventType, { itemId });
 }
 </script>
 
 <template>
-  <div class="checklist-widget">
+  <div :key="getChecklistKey()" class="checklist-widget">
     <label
       v-for="item in component.props.items"
-      :key="item.id"
+      :key="`${item.id}:${item.label}:${item.checked ? '1' : '0'}`"
       class="check-item"
     >
       <el-checkbox

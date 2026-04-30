@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import type { WorkflowEventInput } from "../../types/workflow";
-import { useWidgetEvents } from "./useWidgetEvents";
 import type { WidgetPropsOfType } from "./widgetContract";
 
 const props = defineProps<{
@@ -12,14 +11,28 @@ const emit = defineEmits<{
   dispatch: [event: WorkflowEventInput];
 }>();
 
-const { isEventAllowed, dispatch } = useWidgetEvents(
-  () => props.runtime,
-  emit,
-  props.component.id,
-);
+function isEventAllowed(eventType: string): boolean {
+  return props.runtime.allowedEvents.includes(eventType);
+}
+
+function canDispatch(eventType: string): boolean {
+  return !props.runtime.isDispatching && isEventAllowed(eventType);
+}
 
 function trigger(eventType: string, payload?: Record<string, unknown>): void {
-  dispatch(eventType, payload);
+  if (!canDispatch(eventType)) {
+    return;
+  }
+
+  emit("dispatch", {
+    type: eventType,
+    componentId: props.component.id,
+    payload,
+  });
+}
+
+function isActionLoading(eventType: string): boolean {
+  return props.runtime.isDispatching && isEventAllowed(eventType);
 }
 </script>
 
@@ -30,8 +43,8 @@ function trigger(eventType: string, payload?: Record<string, unknown>): void {
       :key="`${component.id}_${action.label}`"
       :type="action.buttonType ?? 'primary'"
       size="large"
-      :loading="runtime.isDispatching && isEventAllowed(action.eventType)"
-      :disabled="runtime.isDispatching || !isEventAllowed(action.eventType)"
+      :loading="isActionLoading(action.eventType)"
+      :disabled="!canDispatch(action.eventType)"
       @click="trigger(action.eventType, action.payload)"
     >
       {{ action.label }}

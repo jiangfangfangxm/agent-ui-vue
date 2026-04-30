@@ -8,13 +8,24 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any, Dict
 
 from agent_patch_builders.logging_utils import configure_logging, get_logger
-
 from agent_patch_builders.workflow_action_builders import (
+    build_add_action_item_patches,
     build_add_checklist_item_patches,
+    build_add_review_direction_after_report_patches,
+    build_cancel_add_direction_patches,
+    build_confirm_action_plan_patches,
+    build_confirm_risk_identification_patches,
+    build_edit_report_patches,
+    build_enter_risk_identification_patches,
     build_init_event_patches,
     build_open_detail_patches,
+    build_resolve_no_risk_patches,
     build_risk_check_event_patches,
+    build_set_risk_decision_patches,
+    build_submit_new_direction_after_report_patches,
+    build_toggle_action_item_patches,
     build_toggle_checklist_item_patches,
+    build_update_risk_reason_patches,
 )
 
 logger = get_logger("patch_service")
@@ -51,6 +62,39 @@ def build_patch_plan(payload: Dict[str, Any]) -> Dict[str, Any]:
         )
     elif event_type == "open_detail":
         patches = build_open_detail_patches(event=event)
+    elif event_type == "edit_report":
+        patches = build_edit_report_patches(event=event)
+    elif event_type == "add_review_direction_after_report":
+        patches = build_add_review_direction_after_report_patches(
+            envelope=envelope,
+            event=event,
+        )
+    elif event_type == "submit_new_direction_after_report":
+        patches = build_submit_new_direction_after_report_patches(
+            envelope=envelope,
+            event=event,
+        )
+    elif event_type == "cancel_add_direction":
+        patches = build_cancel_add_direction_patches(
+            envelope=envelope,
+            event=event,
+        )
+    elif event_type == "enter_risk_identification":
+        patches = build_enter_risk_identification_patches(event=event)
+    elif event_type == "set_risk_decision":
+        patches = build_set_risk_decision_patches(envelope=envelope, event=event)
+    elif event_type == "update_risk_reason":
+        patches = build_update_risk_reason_patches(envelope=envelope, event=event)
+    elif event_type == "resolve_no_risk":
+        patches = build_resolve_no_risk_patches(envelope=envelope, event=event)
+    elif event_type == "confirm_risk_identification":
+        patches = build_confirm_risk_identification_patches(envelope=envelope, event=event)
+    elif event_type == "toggle_action_item":
+        patches = build_toggle_action_item_patches(envelope=envelope, event=event)
+    elif event_type == "add_action_item":
+        patches = build_add_action_item_patches(envelope=envelope, event=event)
+    elif event_type == "confirm_action_plan":
+        patches = build_confirm_action_plan_patches(envelope=envelope, event=event)
     else:
         raise ValueError(f"Unsupported event type: {event_type}")
 

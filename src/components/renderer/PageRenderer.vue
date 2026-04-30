@@ -1,6 +1,10 @@
 <script setup lang="ts">
 import SectionRenderer from "./SectionRenderer.vue";
-import type { UIPageSchema, WorkflowEvent } from "../../types/workflow";
+import type {
+  UIPageSchema,
+  UISection,
+  WorkflowEvent,
+} from "../../types/workflow";
 
 defineProps<{
   page: UIPageSchema;
@@ -11,13 +15,17 @@ defineProps<{
 const emit = defineEmits<{
   dispatch: [event: Omit<WorkflowEvent, "id" | "timestamp">];
 }>();
+
+function getSectionKey(section: UISection): string {
+  return `${section.id}:${section.title}:${JSON.stringify(section.components)}`;
+}
 </script>
 
 <template>
   <div class="page-renderer">
     <SectionRenderer
       v-for="section in page.sections"
-      :key="section.id"
+      :key="getSectionKey(section)"
       :section="section"
       :allowed-events="allowedEvents"
       :is-dispatching="isDispatching"

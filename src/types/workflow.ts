@@ -33,6 +33,11 @@ export interface WorkflowRiskSummary {
 export type RiskLevel = "low" | "medium" | "high";
 export type WorkflowState =
   | "reviewing"
+  | "report_reviewing"
+  | "risk_identifying"
+  | "action_planning"
+  | "resolved_no_risk"
+  | "resolved_with_action"
   | "presenting_result"
   | "awaiting_revision";
 

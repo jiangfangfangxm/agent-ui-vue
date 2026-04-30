@@ -11,6 +11,10 @@ defineProps<{
 const emit = defineEmits<{
   dispatch: [event: Omit<WorkflowEvent, "id" | "timestamp">];
 }>();
+
+function getComponentKey(component: UISection["components"][number]): string {
+  return `${component.id}:${JSON.stringify(component.props)}`;
+}
 </script>
 
 <template>
@@ -27,7 +31,7 @@ const emit = defineEmits<{
     <div class="component-list">
       <ComponentRenderer
         v-for="component in section.components"
-        :key="component.id"
+        :key="getComponentKey(component)"
         :component="component"
         :allowed-events="allowedEvents"
         :is-dispatching="isDispatching"
