@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from "vue";
+import { computed, ref, watch } from "vue";
 import type { WorkflowEventInput } from "../../types/workflow";
 import type { WidgetPropsOfType } from "./widgetContract";
 import { useWidgetEvents } from "./useWidgetEvents";
@@ -13,7 +13,7 @@ const emit = defineEmits<{
   dispatch: [event: WorkflowEventInput];
 }>();
 
-const draft = ref("");
+const draft = ref(props.component.props.defaultValue ?? "");
 const { canDispatch, dispatch } = useWidgetEvents(
   () => props.runtime,
   emit,
@@ -40,6 +40,21 @@ function submit(): void {
     draft.value = "";
   }
 }
+
+function handleEnter(): void {
+  if (props.component.props.inputType === "textarea") {
+    return;
+  }
+
+  submit();
+}
+
+watch(
+  () => props.component.props.defaultValue,
+  (value) => {
+    draft.value = value ?? "";
+  },
+);
 </script>
 
 <template>
@@ -56,10 +71,12 @@ function submit(): void {
     <div class="input-row">
       <el-input
         v-model="draft"
+        :type="component.props.inputType ?? 'text'"
+        :rows="component.props.inputType === 'textarea' ? 10 : undefined"
         :placeholder="component.props.placeholder ?? '请输入内容'"
         :disabled="runtime.isDispatching"
         clearable
-        @keyup.enter="submit"
+        @keyup.enter="handleEnter"
       />
       <el-button
         type="primary"

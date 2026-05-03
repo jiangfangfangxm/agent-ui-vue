@@ -10,6 +10,12 @@ export const initialEnvelope: WorkflowEnvelope = {
   version: "1.0.0",
   state: "reviewing",
   allowedEvents: ["init_event"],
+  context: {
+    warningDetailItems: [],
+    reviewDirections: [],
+    riskReason: "",
+    actionItems: [],
+  },
   riskSummary: {
     level: "medium",
     summary: "页面已启动，正在等待初始化预警数据。",

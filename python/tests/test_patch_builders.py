@@ -10,16 +10,20 @@ from agent_patch_builders.workflow_action_builders import (
     build_add_checklist_item_patches,
     build_add_review_direction_after_report_patches,
     build_cancel_add_direction_patches,
+    build_cancel_report_revision_patches,
     build_confirm_action_plan_patches,
+    build_edit_report_patches,
     build_enter_risk_identification_patches,
     build_init_event_patches,
     build_resolve_no_risk_patches,
     build_risk_check_event_patches,
+    build_save_report_revision_patches,
     build_set_risk_decision_patches,
     build_submit_new_direction_after_report_patches,
     build_toggle_action_item_patches,
     build_update_risk_reason_patches,
 )
+from agent_patch_builders.workflow_definition import validate_event_contract
 
 
 def make_envelope():
@@ -28,6 +32,14 @@ def make_envelope():
         "version": "1.0.0",
         "state": "reviewing",
         "allowedEvents": ["init_event"],
+        "context": {
+            "warningDetailItems": [],
+            "reviewDirections": [],
+            "reportText": "",
+            "riskDecision": None,
+            "riskReason": "",
+            "actionItems": [],
+        },
         "riskSummary": {
             "level": "medium",
             "summary": "当前存在一条待核查预警。",
@@ -142,6 +154,11 @@ class PatchBuilderTests(unittest.TestCase):
             next_envelope["allowedEvents"],
             ["toggle_check", "add_checklist_item", "Risk_Check_Event", "open_detail"],
         )
+        self.assertEqual(
+            next_envelope["context"]["warningDetailItems"][0]["value"],
+            "WARN-20260428-028",
+        )
+        self.assertGreater(len(next_envelope["context"]["reviewDirections"]), 1)
 
     def test_add_checklist_item_appends_direction(self):
         envelope = apply_patches(
@@ -174,6 +191,104 @@ class PatchBuilderTests(unittest.TestCase):
         labels = [item["label"] for item in review["components"][0]["props"]["items"]]
         self.assertIn("补充核验最终受益人变更记录", labels)
 
+    def test_context_is_updated_when_direction_is_added(self):
+        envelope = apply_patches(
+            make_envelope(),
+            build_init_event_patches(
+                envelope=make_envelope(),
+                event={
+                    "id": "evt_init_context_add_1",
+                    "type": "init_event",
+                    "componentId": "system_init",
+                    "timestamp": "09:30",
+                    "payload": {},
+                },
+            ),
+        )
+        next_envelope = apply_patches(
+            envelope,
+            build_add_checklist_item_patches(
+                envelope=envelope,
+                event={
+                    "id": "evt_add_context_1",
+                    "type": "add_checklist_item",
+                    "componentId": "cmp_custom_check_input",
+                    "timestamp": "09:35",
+                    "payload": {"label": "context-only direction"},
+                },
+            ),
+        )
+
+        self.assertIn(
+            "context-only direction",
+            [item["label"] for item in next_envelope["context"]["reviewDirections"]],
+        )
+
+    def test_report_generation_prefers_context_over_stale_ui(self):
+        envelope = apply_patches(
+            make_envelope(),
+            build_init_event_patches(
+                envelope=make_envelope(),
+                event={
+                    "id": "evt_init_context_1",
+                    "type": "init_event",
+                    "componentId": "system_init",
+                    "timestamp": "09:30",
+                    "payload": {},
+                },
+            ),
+        )
+        envelope["context"]["reviewDirections"] = [
+            {
+                "id": "item_context_only",
+                "label": "context-only review direction",
+                "checked": True,
+            }
+        ]
+        review = next(
+            section for section in envelope["page"]["sections"] if section["id"] == "sec_main_review"
+        )
+        review["components"][0]["props"]["items"] = [
+            {
+                "id": "item_stale_ui",
+                "label": "stale-ui review direction",
+                "checked": True,
+            }
+        ]
+
+        next_envelope = apply_patches(
+            envelope,
+            build_risk_check_event_patches(
+                envelope=envelope,
+                event={
+                    "id": "evt_risk_context_1",
+                    "type": "Risk_Check_Event",
+                    "componentId": "cmp_actions",
+                    "timestamp": "09:40",
+                    "payload": {"action": "execute"},
+                },
+            ),
+        )
+        report = next(
+            section for section in next_envelope["page"]["sections"] if section["id"] == "sec_review_report"
+        )
+
+        self.assertIn("context-only review direction", report["components"][0]["props"]["content"])
+        self.assertNotIn("stale-ui review direction", report["components"][0]["props"]["content"])
+
+    def test_event_contract_rejects_invalid_payload(self):
+        with self.assertRaises(ValueError):
+            validate_event_contract(
+                "risk_identifying",
+                {
+                    "id": "evt_bad_decision",
+                    "type": "set_risk_decision",
+                    "componentId": "cmp_risk_identification_actions",
+                    "timestamp": "09:42",
+                    "payload": {"decision": "maybe"},
+                },
+            )
+
     def test_risk_check_event_generates_report_and_report_actions(self):
         next_envelope = initialize_report_stage()
         section_ids = [section["id"] for section in next_envelope["page"]["sections"]]
@@ -203,6 +318,97 @@ class PatchBuilderTests(unittest.TestCase):
                 "open_detail",
             ],
         )
+
+    def test_edit_report_enters_revision_subflow_and_save_returns_to_report_stage(self):
+        report_stage = initialize_report_stage()
+        editing = apply_patches(
+            report_stage,
+            build_edit_report_patches(
+                envelope=report_stage,
+                event={
+                    "id": "evt_edit_report_1",
+                    "type": "edit_report",
+                    "componentId": "cmp_report_actions",
+                    "timestamp": "09:41",
+                    "payload": {},
+                },
+            ),
+        )
+
+        self.assertEqual(editing["state"], "awaiting_revision")
+        self.assertIn("sec_report_edit", [section["id"] for section in editing["page"]["sections"]])
+        self.assertNotIn("sec_report_actions", [section["id"] for section in editing["page"]["sections"]])
+        self.assertEqual(
+            editing["allowedEvents"],
+            ["save_report_revision", "cancel_report_revision", "open_detail"],
+        )
+
+        saved = apply_patches(
+            editing,
+            build_save_report_revision_patches(
+                envelope=editing,
+                event={
+                    "id": "evt_save_report_1",
+                    "type": "save_report_revision",
+                    "componentId": "cmp_report_revision_input",
+                    "timestamp": "09:42",
+                    "payload": {"label": "人工修订后的核查报告"},
+                },
+            ),
+        )
+        report = next(
+            section for section in saved["page"]["sections"] if section["id"] == "sec_review_report"
+        )
+
+        self.assertEqual(saved["state"], "report_reviewing")
+        self.assertEqual(saved["context"]["reportText"], "人工修订后的核查报告")
+        self.assertEqual(report["components"][0]["props"]["content"], "人工修订后的核查报告")
+        self.assertNotIn("sec_report_edit", [section["id"] for section in saved["page"]["sections"]])
+        self.assertIn("sec_report_actions", [section["id"] for section in saved["page"]["sections"]])
+        self.assertEqual(
+            saved["allowedEvents"],
+            [
+                "edit_report",
+                "add_review_direction_after_report",
+                "enter_risk_identification",
+                "open_detail",
+            ],
+        )
+
+    def test_cancel_report_revision_keeps_original_report(self):
+        report_stage = initialize_report_stage()
+        original_report = report_stage["context"]["reportText"]
+        editing = apply_patches(
+            report_stage,
+            build_edit_report_patches(
+                envelope=report_stage,
+                event={
+                    "id": "evt_edit_report_2",
+                    "type": "edit_report",
+                    "componentId": "cmp_report_actions",
+                    "timestamp": "09:41",
+                    "payload": {},
+                },
+            ),
+        )
+        cancelled = apply_patches(
+            editing,
+            build_cancel_report_revision_patches(
+                envelope=editing,
+                event={
+                    "id": "evt_cancel_report_1",
+                    "type": "cancel_report_revision",
+                    "componentId": "cmp_report_revision_cancel",
+                    "timestamp": "09:42",
+                    "payload": {},
+                },
+            ),
+        )
+
+        self.assertEqual(cancelled["state"], "report_reviewing")
+        self.assertEqual(cancelled["context"]["reportText"], original_report)
+        self.assertNotIn("sec_report_edit", [section["id"] for section in cancelled["page"]["sections"]])
+        self.assertIn("sec_report_actions", [section["id"] for section in cancelled["page"]["sections"]])
 
     def test_add_review_direction_after_report_updates_review_and_report(self):
         report_stage = initialize_report_stage()

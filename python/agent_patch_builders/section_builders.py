@@ -159,6 +159,43 @@ def build_add_review_direction_section() -> Dict[str, object]:
     }
 
 
+def build_report_edit_section(report_text: str) -> Dict[str, object]:
+    return {
+        "id": "sec_report_edit",
+        "title": "修改核查报告",
+        "description": "报告修改会通过 save_report_revision 事件回写到业务 context，并刷新核查报告区。",
+        "components": [
+            {
+                "id": "cmp_report_revision_input",
+                "type": "text_input",
+                "props": {
+                    "eventType": "save_report_revision",
+                    "label": "核查报告内容",
+                    "placeholder": "请输入修改后的核查报告内容",
+                    "buttonLabel": "保存报告",
+                    "helperText": "保存后系统会更新核查报告并回到报告后续处理阶段。",
+                    "clearOnSubmit": False,
+                    "defaultValue": report_text,
+                    "inputType": "textarea",
+                },
+            },
+            {
+                "id": "cmp_report_revision_cancel",
+                "type": "button_group",
+                "props": {
+                    "actions": [
+                        {
+                            "label": "取消修改",
+                            "eventType": "cancel_report_revision",
+                            "buttonType": "info",
+                        }
+                    ]
+                },
+            },
+        ],
+    }
+
+
 def _decision_label(decision: RiskDecision) -> str:
     if decision == "has_risk":
         return "有风险"

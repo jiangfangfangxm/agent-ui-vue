@@ -36,6 +36,8 @@ def apply_patches(envelope: Dict[str, Any], patches: List[Dict[str, Any]]) -> Di
 
         if op == "set_state":
             current["state"] = patch["value"]
+        elif op == "set_context":
+            current["context"] = patch["value"]
         elif op == "replace_section":
             _ensure_section_exists(sections, patch["sectionId"], patch)
             current["page"]["sections"] = [
