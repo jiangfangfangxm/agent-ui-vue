@@ -31,6 +31,7 @@ export interface WorkflowRiskSummary {
 }
 
 export type RiskLevel = "low" | "medium" | "high";
+export type RiskDecision = "has_risk" | "no_risk";
 export type WorkflowState =
   | "reviewing"
   | "report_reviewing"
@@ -50,6 +51,15 @@ export interface WorkflowEvent {
 }
 
 export type WorkflowEventInput = Omit<WorkflowEvent, "id" | "timestamp">;
+
+export interface WorkflowContext {
+  warningDetailItems: Array<{ label: string; value: string }>;
+  reviewDirections: ChecklistItem[];
+  reportText?: string;
+  riskDecision?: RiskDecision;
+  riskReason: string;
+  actionItems: ChecklistItem[];
+}
 
 export interface EventAction {
   eventType: string;
@@ -104,6 +114,8 @@ export type TextInputComponent = BaseComponent<
     buttonLabel?: string;
     helperText?: string;
     clearOnSubmit?: boolean;
+    defaultValue?: string;
+    inputType?: "text" | "textarea";
   }
 >;
 
@@ -258,10 +270,12 @@ export interface WorkflowEnvelope {
   messages: WorkflowMessage[];
   allowedEvents: string[];
   riskSummary: WorkflowRiskSummary;
+  context: WorkflowContext;
 }
 
 export type PatchOperation =
   | { op: "set_state"; value: WorkflowState }
+  | { op: "set_context"; value: WorkflowContext }
   | { op: "replace_section"; sectionId: string; value: UISection }
   | { op: "append_section"; value: UISection; beforeSectionId?: string }
   | { op: "remove_section"; sectionId: string }

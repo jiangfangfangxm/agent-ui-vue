@@ -30,6 +30,10 @@ def build_set_state_patch(state: str) -> PatchDict:
     return {"op": "set_state", "value": state}
 
 
+def build_set_context_patch(context: Dict[str, Any]) -> PatchDict:
+    return {"op": "set_context", "value": context}
+
+
 def build_set_allowed_events_patch(events: List[str]) -> PatchDict:
     return {"op": "set_allowed_events", "value": events}
 

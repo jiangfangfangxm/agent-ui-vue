@@ -13,6 +13,7 @@ import type {
   WorkflowEventInput,
 } from "../types/workflow";
 import { applyPatches, PatchApplicationError } from "../utils/patch";
+import { validateEventInput } from "../workflow/definition";
 
 function createEventId(): string {
   return `evt_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
@@ -58,6 +59,24 @@ export function useWorkflowRuntime() {
 
   const dispatchEvent = async (input: WorkflowEventInput): Promise<void> => {
     const event = createEvent(input);
+    const contractError = validateEventInput(envelope.value.state, input);
+
+    if (contractError) {
+      lastError.value = contractError;
+      envelope.value = {
+        ...envelope.value,
+        messages: [
+          createRuntimeMessage(
+            `msg_invalid_contract_${event.id}`,
+            "事件契约校验失败",
+            lastError.value,
+            event.timestamp,
+          ),
+          ...envelope.value.messages,
+        ],
+      };
+      return;
+    }
 
     if (!envelope.value.allowedEvents.includes(event.type)) {
       lastError.value = `事件“${event.type}”在当前工作流状态下不允许执行。`;

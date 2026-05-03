@@ -59,6 +59,8 @@ function applyPatch(
   switch (patch.op) {
     case "set_state":
       return { ...envelope, state: patch.value };
+    case "set_context":
+      return { ...envelope, context: patch.value };
     case "replace_section":
       ensureSectionExists(sections, patch.sectionId, patch);
 

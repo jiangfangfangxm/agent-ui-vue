@@ -13,6 +13,7 @@ from agent_patch_builders.workflow_action_builders import (
     build_add_checklist_item_patches,
     build_add_review_direction_after_report_patches,
     build_cancel_add_direction_patches,
+    build_cancel_report_revision_patches,
     build_confirm_action_plan_patches,
     build_confirm_risk_identification_patches,
     build_edit_report_patches,
@@ -21,12 +22,14 @@ from agent_patch_builders.workflow_action_builders import (
     build_open_detail_patches,
     build_resolve_no_risk_patches,
     build_risk_check_event_patches,
+    build_save_report_revision_patches,
     build_set_risk_decision_patches,
     build_submit_new_direction_after_report_patches,
     build_toggle_action_item_patches,
     build_toggle_checklist_item_patches,
     build_update_risk_reason_patches,
 )
+from agent_patch_builders.workflow_definition import validate_event_contract
 
 logger = get_logger("patch_service")
 
@@ -42,6 +45,7 @@ def build_patch_plan(payload: Dict[str, Any]) -> Dict[str, Any]:
         envelope.get("state"),
         envelope.get("allowedEvents", []),
     )
+    validate_event_contract(str(envelope.get("state")), event)
 
     if event_type == "init_event":
         patches = build_init_event_patches(envelope=envelope, event=event)
@@ -63,7 +67,11 @@ def build_patch_plan(payload: Dict[str, Any]) -> Dict[str, Any]:
     elif event_type == "open_detail":
         patches = build_open_detail_patches(event=event)
     elif event_type == "edit_report":
-        patches = build_edit_report_patches(event=event)
+        patches = build_edit_report_patches(envelope=envelope, event=event)
+    elif event_type == "save_report_revision":
+        patches = build_save_report_revision_patches(envelope=envelope, event=event)
+    elif event_type == "cancel_report_revision":
+        patches = build_cancel_report_revision_patches(envelope=envelope, event=event)
     elif event_type == "add_review_direction_after_report":
         patches = build_add_review_direction_after_report_patches(
             envelope=envelope,
@@ -80,7 +88,7 @@ def build_patch_plan(payload: Dict[str, Any]) -> Dict[str, Any]:
             event=event,
         )
     elif event_type == "enter_risk_identification":
-        patches = build_enter_risk_identification_patches(event=event)
+        patches = build_enter_risk_identification_patches(envelope=envelope, event=event)
     elif event_type == "set_risk_decision":
         patches = build_set_risk_decision_patches(envelope=envelope, event=event)
     elif event_type == "update_risk_reason":

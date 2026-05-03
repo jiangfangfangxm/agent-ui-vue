@@ -13,6 +13,7 @@ from .patch_helpers import (
     build_remove_section_patch,
     build_replace_section_patch,
     build_set_allowed_events_patch,
+    build_set_context_patch,
     build_set_risk_summary_patch,
     build_set_state_patch,
 )
@@ -23,59 +24,30 @@ from .section_builders import (
     build_add_review_direction_section,
     build_no_risk_resolution_section,
     build_report_actions_section,
+    build_report_edit_section,
     build_review_direction_section,
     build_risk_check_report_section,
     build_risk_identification_section,
     build_warning_detail_section,
 )
 from .summary_builders import build_risk_summary
+from .workflow_definition import allowed_events_for_state
 
 logger = get_logger("workflow_action_builders")
 
-INIT_STAGE_ALLOWED_EVENTS = [
-    "toggle_check",
-    "add_checklist_item",
-    "Risk_Check_Event",
-    "open_detail",
-]
-
-REPORT_STAGE_ALLOWED_EVENTS = [
-    "edit_report",
-    "add_review_direction_after_report",
-    "enter_risk_identification",
-    "open_detail",
-]
-
-ADD_REVIEW_DIRECTION_ALLOWED_EVENTS = [
-    "submit_new_direction_after_report",
-    "cancel_add_direction",
-    "open_detail",
-]
-
-RISK_IDENTIFICATION_ALLOWED_EVENTS = [
-    "set_risk_decision",
-    "update_risk_reason",
-    "resolve_no_risk",
-    "confirm_risk_identification",
-    "open_detail",
-]
-
-ACTION_PLANNING_ALLOWED_EVENTS = [
-    "toggle_action_item",
-    "add_action_item",
-    "confirm_action_plan",
-    "open_detail",
-]
-
-RISK_AND_ACTION_ALLOWED_EVENTS = [
-    "set_risk_decision",
-    "update_risk_reason",
-    "resolve_no_risk",
-    "toggle_action_item",
-    "add_action_item",
-    "confirm_action_plan",
-    "open_detail",
-]
+INIT_STAGE_ALLOWED_EVENTS = allowed_events_for_state("reviewing")
+REPORT_STAGE_ALLOWED_EVENTS = allowed_events_for_state("report_reviewing")
+ADD_REVIEW_DIRECTION_ALLOWED_EVENTS = allowed_events_for_state(
+    "report_reviewing",
+    mode="adding_review_direction",
+)
+RISK_IDENTIFICATION_ALLOWED_EVENTS = allowed_events_for_state("risk_identifying")
+ACTION_PLANNING_ALLOWED_EVENTS = allowed_events_for_state("action_planning")
+RISK_AND_ACTION_ALLOWED_EVENTS = allowed_events_for_state(
+    "action_planning",
+    include_risk_controls=True,
+)
+REPORT_REVISION_ALLOWED_EVENTS = allowed_events_for_state("awaiting_revision")
 
 
 def _find_section(envelope: Dict[str, Any], section_id: str) -> Optional[Dict[str, Any]]:
@@ -105,7 +77,16 @@ def _find_action_plan_checklist(envelope: Dict[str, Any]) -> Optional[Dict[str, 
     )
 
 
-def _overview_items(envelope: Dict[str, Any]) -> List[Dict[str, str]]:
+def _context(envelope: Dict[str, Any]) -> Dict[str, Any]:
+    context = clone(envelope.get("context") or {})
+    context.setdefault("warningDetailItems", _overview_items_from_sections(envelope))
+    context.setdefault("reviewDirections", _review_direction_items_from_sections(envelope))
+    context.setdefault("riskReason", "")
+    context.setdefault("actionItems", _action_items_from_sections(envelope))
+    return context
+
+
+def _overview_items_from_sections(envelope: Dict[str, Any]) -> List[Dict[str, str]]:
     section = _find_section(envelope, "sec_overview")
     if not section:
         return []
@@ -116,18 +97,34 @@ def _overview_items(envelope: Dict[str, Any]) -> List[Dict[str, str]]:
     return clone(component["props"]["items"]) if component else []
 
 
-def _checked_items(envelope: Dict[str, Any]) -> List[ChecklistItemDict]:
+def _review_direction_items_from_sections(envelope: Dict[str, Any]) -> List[ChecklistItemDict]:
     checklist = _find_checklist_component(envelope)
-    if not checklist:
-        return []
-    return [item for item in checklist["props"]["items"] if item.get("checked")]
+    return clone(checklist["props"]["items"]) if checklist else []
+
+
+def _action_items_from_sections(envelope: Dict[str, Any]) -> List[ChecklistItemDict]:
+    checklist = _find_action_plan_checklist(envelope)
+    return clone(checklist["props"]["items"]) if checklist else []
+
+
+def _review_direction_items(envelope: Dict[str, Any]) -> List[ChecklistItemDict]:
+    return clone(_context(envelope).get("reviewDirections") or [])
+
+
+def _action_plan_items(envelope: Dict[str, Any]) -> List[ChecklistItemDict]:
+    return clone(_context(envelope).get("actionItems") or [])
+
+
+def _overview_items(envelope: Dict[str, Any]) -> List[Dict[str, str]]:
+    return clone(_context(envelope).get("warningDetailItems") or [])
+
+
+def _checked_items(envelope: Dict[str, Any]) -> List[ChecklistItemDict]:
+    return [item for item in _review_direction_items(envelope) if item.get("checked")]
 
 
 def _unchecked_items(envelope: Dict[str, Any]) -> List[ChecklistItemDict]:
-    checklist = _find_checklist_component(envelope)
-    if not checklist:
-        return []
-    return [item for item in checklist["props"]["items"] if not item.get("checked")]
+    return [item for item in _review_direction_items(envelope) if not item.get("checked")]
 
 
 def _build_risk_check_report_text(
@@ -136,8 +133,7 @@ def _build_risk_check_report_text(
 ) -> str:
     items = checklist_items
     if items is None:
-        checklist = _find_checklist_component(envelope)
-        items = clone(checklist["props"]["items"]) if checklist else []
+        items = _review_direction_items(envelope)
 
     checked_items = [item for item in items if item.get("checked")]
     unchecked_items = [item for item in items if not item.get("checked")]
@@ -171,13 +167,18 @@ def _build_risk_check_report_text(
 
 
 def _checked_action_items(envelope: Dict[str, Any]) -> List[ChecklistItemDict]:
-    checklist = _find_action_plan_checklist(envelope)
-    if not checklist:
-        return []
-    return [item for item in checklist["props"]["items"] if item.get("checked")]
+    return [item for item in _action_plan_items(envelope) if item.get("checked")]
 
 
 def _find_risk_identification_state(envelope: Dict[str, Any]) -> tuple[RiskDecision, str]:
+    context = _context(envelope)
+    if "riskDecision" in context or context.get("riskReason"):
+        decision = context.get("riskDecision")
+        normalized_decision: RiskDecision = (
+            "has_risk" if decision == "has_risk" else "no_risk" if decision == "no_risk" else None
+        )
+        return normalized_decision, str(context.get("riskReason") or "")
+
     section = _find_section(envelope, "sec_risk_identification")
     if not section:
         return None, ""
@@ -308,6 +309,17 @@ def build_init_event_patches(
     )
 
     return [
+        build_set_context_patch(
+            {
+                **_context(envelope),
+                "warningDetailItems": clone(warning_detail_items),
+                "reviewDirections": clone(review_direction_items),
+                "reportText": "",
+                "riskDecision": None,
+                "riskReason": "",
+                "actionItems": [],
+            }
+        ),
         build_replace_section_patch(
             "sec_overview",
             build_warning_detail_section(warning_detail_items),
@@ -347,11 +359,10 @@ def build_toggle_checklist_item_patches(
     event: Dict[str, Any],
 ) -> List[Dict[str, Any]]:
     runtime_event = RuntimeEvent.from_dict(event)
-    section = clone(_find_section(envelope, "sec_main_review"))
-    checklist = _find_checklist_component(envelope)
-    if not section or not checklist:
+    current_items = _review_direction_items(envelope)
+    if not current_items:
         logger.warning(
-            "toggle_check skipped: section_or_checklist_missing event_id=%s",
+            "toggle_check skipped: review_directions_missing event_id=%s",
             runtime_event.id,
         )
         return []
@@ -365,17 +376,15 @@ def build_toggle_checklist_item_patches(
 
     next_items = [
         {**item, "checked": not item.get("checked", False)} if item["id"] == item_id else item
-        for item in checklist["props"]["items"]
+        for item in current_items
     ]
 
-    for component in section["components"]:
-        if component["id"] == checklist["id"]:
-            component["props"]["items"] = next_items
-
     checked_count = sum(1 for item in next_items if item.get("checked"))
+    next_context = {**_context(envelope), "reviewDirections": clone(next_items)}
 
     return [
-        build_replace_section_patch("sec_main_review", section),
+        build_set_context_patch(next_context),
+        build_replace_section_patch("sec_main_review", build_review_direction_section(next_items)),
         build_prepend_message_patch(
             build_message(
                 message_id=f"msg_toggle_{runtime_event.id}",
@@ -395,20 +404,18 @@ def build_add_checklist_item_patches(
 ) -> List[Dict[str, Any]]:
     runtime_event = RuntimeEvent.from_dict(event)
     normalized_label = str((runtime_event.payload or {}).get("label", "")).strip()
-    section = clone(_find_section(envelope, "sec_main_review"))
-    checklist = _find_checklist_component(envelope)
+    current_items = _review_direction_items(envelope)
     logger.info(
         "Processing add_checklist_item: event_id=%s label=%s",
         runtime_event.id,
         normalized_label,
     )
 
-    if not section or not checklist or not normalized_label:
+    if not current_items or not normalized_label:
         logger.warning(
-            "add_checklist_item rejected: invalid_input event_id=%s has_section=%s has_checklist=%s",
+            "add_checklist_item rejected: invalid_input event_id=%s has_review_directions=%s",
             runtime_event.id,
-            bool(section),
-            bool(checklist),
+            bool(current_items),
         )
         return [
             build_prepend_message_patch(
@@ -425,7 +432,7 @@ def build_add_checklist_item_patches(
 
     exists = any(
         item["label"].strip().lower() == normalized_label.lower()
-        for item in checklist["props"]["items"]
+        for item in current_items
     )
     if exists:
         logger.warning(
@@ -453,9 +460,8 @@ def build_add_checklist_item_patches(
         "checked": False,
     }
 
-    for component in section["components"]:
-        if component["type"] == "checklist":
-            component["props"]["items"] = [*component["props"]["items"], next_item]
+    next_items = [*current_items, next_item]
+    next_context = {**_context(envelope), "reviewDirections": clone(next_items)}
 
     current_summary = clone(envelope["riskSummary"])
     current_summary["details"] = [
@@ -464,7 +470,8 @@ def build_add_checklist_item_patches(
     ][:5]
 
     return [
-        build_replace_section_patch("sec_main_review", section),
+        build_set_context_patch(next_context),
+        build_replace_section_patch("sec_main_review", build_review_direction_section(next_items)),
         build_prepend_message_patch(
             build_message(
                 message_id=f"msg_add_check_{runtime_event.id}",
@@ -507,7 +514,10 @@ def build_risk_check_event_patches(
         len(report_text),
     )
 
-    patches: List[Dict[str, Any]] = [build_set_state_patch("report_reviewing")]
+    patches: List[Dict[str, Any]] = [
+        build_set_state_patch("report_reviewing"),
+        build_set_context_patch({**_context(envelope), "reportText": report_text}),
+    ]
     if report_exists:
         patches.append(build_remove_section_patch("sec_review_report"))
     if actions_exists:
@@ -577,7 +587,7 @@ def _build_report_stage_placeholder_patches(
     ]
 
 
-def build_edit_report_patches(
+def _build_edit_report_placeholder_patches(
     *,
     event: Dict[str, Any],
 ) -> List[Dict[str, Any]]:
@@ -586,6 +596,139 @@ def build_edit_report_patches(
         title="修改核查报告待实现",
         body="已进入报告阶段，后续会在这里接入核查报告编辑能力。",
     )
+
+
+def build_edit_report_patches(
+    *,
+    envelope: Dict[str, Any],
+    event: Dict[str, Any],
+) -> List[Dict[str, Any]]:
+    runtime_event = RuntimeEvent.from_dict(event)
+    report_text = str(_context(envelope).get("reportText") or "")
+    if not report_text:
+        report_section = _find_section(envelope, "sec_review_report")
+        if report_section:
+            report_component = next(
+                (
+                    component
+                    for component in report_section["components"]
+                    if component["id"] == "cmp_review_report"
+                ),
+                None,
+            )
+            report_text = str(report_component["props"]["content"]) if report_component else ""
+
+    patches: List[Dict[str, Any]] = [
+        build_set_state_patch("awaiting_revision"),
+        build_append_section_patch(
+            build_report_edit_section(report_text),
+            before_section_id="sec_main_review",
+        ),
+        build_set_allowed_events_patch(REPORT_REVISION_ALLOWED_EVENTS),
+        build_prepend_message_patch(
+            build_message(
+                message_id=f"msg_edit_report_{runtime_event.id}",
+                role="system",
+                title="已进入核查报告修改",
+                body="请在报告编辑区修改内容，保存后系统会刷新核查报告并返回报告后续处理阶段。",
+                tone="info",
+                timestamp=runtime_event.timestamp,
+            )
+        ),
+    ]
+    if _find_section(envelope, "sec_report_actions") is not None:
+        patches.insert(1, build_remove_section_patch("sec_report_actions"))
+    if _find_section(envelope, "sec_report_edit") is not None:
+        patches.insert(1, build_remove_section_patch("sec_report_edit"))
+    return patches
+
+
+def build_save_report_revision_patches(
+    *,
+    envelope: Dict[str, Any],
+    event: Dict[str, Any],
+) -> List[Dict[str, Any]]:
+    runtime_event = RuntimeEvent.from_dict(event)
+    report_text = str((runtime_event.payload or {}).get("label", "")).strip()
+    if not report_text:
+        return [
+            build_prepend_message_patch(
+                build_message(
+                    message_id=f"msg_save_report_invalid_{runtime_event.id}",
+                    role="system",
+                    title="核查报告保存失败",
+                    body="请输入有效的核查报告内容后再保存。",
+                    tone="warning",
+                    timestamp=runtime_event.timestamp,
+                )
+            )
+        ]
+
+    patches: List[Dict[str, Any]] = [
+        build_set_state_patch("report_reviewing"),
+        build_set_context_patch({**_context(envelope), "reportText": report_text}),
+        build_replace_section_patch(
+            "sec_review_report",
+            build_risk_check_report_section(report_text),
+        ),
+    ]
+    if _find_section(envelope, "sec_report_edit") is not None:
+        patches.append(build_remove_section_patch("sec_report_edit"))
+    if _find_section(envelope, "sec_report_actions") is not None:
+        patches.append(build_remove_section_patch("sec_report_actions"))
+    patches.extend(
+        [
+            build_append_section_patch(
+                build_report_actions_section(),
+                before_section_id="sec_main_review",
+            ),
+            build_set_allowed_events_patch(REPORT_STAGE_ALLOWED_EVENTS),
+            build_prepend_message_patch(
+                build_message(
+                    message_id=f"msg_save_report_{runtime_event.id}",
+                    role="agent",
+                    title="核查报告已保存",
+                    body="修改后的核查报告已回写到业务 context，并刷新了报告展示区。",
+                    tone="success",
+                    timestamp=runtime_event.timestamp,
+                )
+            ),
+        ]
+    )
+    return patches
+
+
+def build_cancel_report_revision_patches(
+    *,
+    envelope: Dict[str, Any],
+    event: Dict[str, Any],
+) -> List[Dict[str, Any]]:
+    runtime_event = RuntimeEvent.from_dict(event)
+    patches: List[Dict[str, Any]] = [build_set_state_patch("report_reviewing")]
+    if _find_section(envelope, "sec_report_edit") is not None:
+        patches.append(build_remove_section_patch("sec_report_edit"))
+    if _find_section(envelope, "sec_report_actions") is not None:
+        patches.append(build_remove_section_patch("sec_report_actions"))
+    patches.extend(
+        [
+            build_append_section_patch(
+                build_report_actions_section(),
+                before_section_id="sec_main_review",
+            ),
+            build_set_allowed_events_patch(REPORT_STAGE_ALLOWED_EVENTS),
+            build_prepend_message_patch(
+                build_message(
+                    message_id=f"msg_cancel_report_revision_{runtime_event.id}",
+                    role="system",
+                    title="已取消修改核查报告",
+                    body="系统已返回报告后续处理阶段，原核查报告内容保持不变。",
+                    tone="info",
+                    timestamp=runtime_event.timestamp,
+                )
+            ),
+        ]
+    )
+    return patches
 
 
 def build_add_review_direction_after_report_patches(
@@ -632,15 +775,14 @@ def build_submit_new_direction_after_report_patches(
 ) -> List[Dict[str, Any]]:
     runtime_event = RuntimeEvent.from_dict(event)
     normalized_label = str((runtime_event.payload or {}).get("label", "")).strip()
-    section = clone(_find_section(envelope, "sec_main_review"))
-    checklist = _find_checklist_component(envelope)
+    current_items = _review_direction_items(envelope)
     logger.info(
         "Processing submit_new_direction_after_report: event_id=%s label=%s",
         runtime_event.id,
         normalized_label,
     )
 
-    if not section or not checklist or not normalized_label:
+    if not current_items or not normalized_label:
         return [
             build_prepend_message_patch(
                 build_message(
@@ -654,7 +796,6 @@ def build_submit_new_direction_after_report_patches(
             )
         ]
 
-    current_items = clone(checklist["props"]["items"])
     exists = any(
         item["label"].strip().lower() == normalized_label.lower()
         for item in current_items
@@ -680,14 +821,9 @@ def build_submit_new_direction_after_report_patches(
         "checked": False,
     }
     next_items = [*current_items, next_item]
+    next_report_text = _build_risk_check_report_text(envelope, next_items)
 
-    for component in section["components"]:
-        if component["type"] == "checklist":
-            component["props"]["items"] = next_items
-
-    report_section = build_risk_check_report_section(
-        _build_risk_check_report_text(envelope, next_items)
-    )
+    report_section = build_risk_check_report_section(next_report_text)
     report_actions_section = build_report_actions_section()
     current_summary = clone(envelope["riskSummary"])
     current_summary["details"] = [
@@ -696,7 +832,14 @@ def build_submit_new_direction_after_report_patches(
     ][:5]
 
     patches: List[Dict[str, Any]] = [
-        build_replace_section_patch("sec_main_review", section),
+        build_set_context_patch(
+            {
+                **_context(envelope),
+                "reviewDirections": clone(next_items),
+                "reportText": next_report_text,
+            }
+        ),
+        build_replace_section_patch("sec_main_review", build_review_direction_section(next_items)),
         build_replace_section_patch("sec_review_report", report_section),
     ]
     if _find_section(envelope, "sec_report_actions") is not None:
@@ -769,6 +912,7 @@ def build_cancel_add_direction_patches(
 def build_enter_risk_identification_patches(
     *,
     event: Dict[str, Any],
+    envelope: Optional[Dict[str, Any]] = None,
 ) -> List[Dict[str, Any]]:
     runtime_event = RuntimeEvent.from_dict(event)
     logger.info(
@@ -776,8 +920,21 @@ def build_enter_risk_identification_patches(
         runtime_event.id,
     )
     section = build_risk_identification_section(decision=None, reason="")
+    next_context = (
+        {**_context(envelope), "riskDecision": None, "riskReason": ""}
+        if envelope
+        else {
+            "warningDetailItems": [],
+            "reviewDirections": [],
+            "reportText": "",
+            "riskDecision": None,
+            "riskReason": "",
+            "actionItems": [],
+        }
+    )
     return [
         build_set_state_patch("risk_identifying"),
+        build_set_context_patch(next_context),
         build_append_section_patch(section, before_section_id="sec_main_review"),
         build_set_allowed_events_patch(RISK_IDENTIFICATION_ALLOWED_EVENTS),
         build_prepend_message_patch(
@@ -821,6 +978,7 @@ def build_set_risk_decision_patches(
         else "未选择"
     )
     patches: List[Dict[str, Any]] = [
+        build_set_context_patch({**_context(envelope), "riskDecision": normalized_decision}),
         build_replace_section_patch("sec_risk_identification", section),
         build_prepend_message_patch(
             build_message(
@@ -836,8 +994,9 @@ def build_set_risk_decision_patches(
 
     action_plan_exists = _find_section(envelope, "sec_action_plan") is not None
     if normalized_decision == "has_risk":
+        action_items = _action_plan_items(envelope) or _build_default_action_plan_items()
         action_section = build_action_plan_section(
-            items=_build_default_action_plan_items(),
+            items=action_items,
             reason=current_reason,
         )
         if action_plan_exists:
@@ -846,6 +1005,13 @@ def build_set_risk_decision_patches(
         patches.extend(
             [
                 build_set_state_patch("action_planning"),
+                build_set_context_patch(
+                    {
+                        **_context(envelope),
+                        "riskDecision": normalized_decision,
+                        "actionItems": clone(action_items),
+                    }
+                ),
                 build_append_section_patch(
                     action_section,
                     before_section_id="sec_main_review",
@@ -880,6 +1046,13 @@ def build_set_risk_decision_patches(
         patches.extend(
             [
                 build_set_state_patch("risk_identifying"),
+                build_set_context_patch(
+                    {
+                        **_context(envelope),
+                        "riskDecision": normalized_decision,
+                        "actionItems": [],
+                    }
+                ),
                 build_set_allowed_events_patch(RISK_IDENTIFICATION_ALLOWED_EVENTS),
             ]
         )
@@ -918,7 +1091,8 @@ def build_update_risk_reason_patches(
         decision=current_decision,
         reason=reason,
     )
-    return [
+    patches: List[Dict[str, Any]] = [
+        build_set_context_patch({**_context(envelope), "riskReason": reason}),
         build_replace_section_patch("sec_risk_identification", section),
         build_prepend_message_patch(
             build_message(
@@ -931,6 +1105,15 @@ def build_update_risk_reason_patches(
             )
         ),
     ]
+    if _find_section(envelope, "sec_action_plan") is not None:
+        patches.insert(
+            2,
+            build_replace_section_patch(
+                "sec_action_plan",
+                build_action_plan_section(items=_action_plan_items(envelope), reason=reason),
+            ),
+        )
+    return patches
 
 
 def build_resolve_no_risk_patches(
@@ -962,6 +1145,14 @@ def build_resolve_no_risk_patches(
     resolution_section = build_no_risk_resolution_section(current_reason)
     patches: List[Dict[str, Any]] = [
         build_set_state_patch("resolved_no_risk"),
+        build_set_context_patch(
+            {
+                **_context(envelope),
+                "riskDecision": "no_risk",
+                "riskReason": current_reason,
+                "actionItems": [],
+            }
+        ),
         build_remove_section_patch("sec_risk_identification"),
         build_append_section_patch(
             resolution_section,
@@ -1024,12 +1215,21 @@ def build_confirm_risk_identification_patches(
             )
         ]
 
+    action_items = _action_plan_items(envelope) or _build_default_action_plan_items()
     action_section = build_action_plan_section(
-        items=_build_default_action_plan_items(),
+        items=action_items,
         reason=current_reason,
     )
     patches: List[Dict[str, Any]] = [
         build_set_state_patch("action_planning"),
+        build_set_context_patch(
+            {
+                **_context(envelope),
+                "riskDecision": "has_risk",
+                "riskReason": current_reason,
+                "actionItems": clone(action_items),
+            }
+        ),
         build_remove_section_patch("sec_risk_identification"),
         build_append_section_patch(action_section, before_section_id="sec_main_review"),
         build_set_allowed_events_patch(ACTION_PLANNING_ALLOWED_EVENTS),
@@ -1071,10 +1271,10 @@ def build_toggle_action_item_patches(
     event: Dict[str, Any],
 ) -> List[Dict[str, Any]]:
     runtime_event = RuntimeEvent.from_dict(event)
-    checklist = _find_action_plan_checklist(envelope)
-    if not checklist:
+    current_items = _action_plan_items(envelope)
+    if not current_items:
         logger.warning(
-            "toggle_action_item skipped: section_or_checklist_missing event_id=%s",
+            "toggle_action_item skipped: action_items_missing event_id=%s",
             runtime_event.id,
         )
         return []
@@ -1088,12 +1288,13 @@ def build_toggle_action_item_patches(
 
     next_items = [
         {**item, "checked": not item.get("checked", False)} if item["id"] == item_id else item
-        for item in checklist["props"]["items"]
+        for item in current_items
     ]
     section = _rebuild_action_plan_section(envelope, next_items)
 
     selected_count = sum(1 for item in next_items if item.get("checked"))
     return [
+        build_set_context_patch({**_context(envelope), "actionItems": clone(next_items)}),
         build_replace_section_patch("sec_action_plan", section),
         build_prepend_message_patch(
             build_message(
@@ -1115,14 +1316,14 @@ def build_add_action_item_patches(
 ) -> List[Dict[str, Any]]:
     runtime_event = RuntimeEvent.from_dict(event)
     normalized_label = str((runtime_event.payload or {}).get("label", "")).strip()
-    checklist = _find_action_plan_checklist(envelope)
+    current_items = _action_plan_items(envelope)
     logger.info(
         "Processing add_action_item: event_id=%s label=%s",
         runtime_event.id,
         normalized_label,
     )
 
-    if not checklist or not normalized_label:
+    if not current_items or not normalized_label:
         return [
             build_prepend_message_patch(
                 build_message(
@@ -1138,7 +1339,7 @@ def build_add_action_item_patches(
 
     exists = any(
         item["label"].strip().lower() == normalized_label.lower()
-        for item in checklist["props"]["items"]
+        for item in current_items
     )
     if exists:
         return [
@@ -1160,10 +1361,11 @@ def build_add_action_item_patches(
         "description": "由核查人员在行动计划阶段手动补充。",
         "checked": True,
     }
-    next_items = [next_item, *checklist["props"]["items"]]
+    next_items = [next_item, *current_items]
     section = _rebuild_action_plan_section(envelope, next_items)
 
     return [
+        build_set_context_patch({**_context(envelope), "actionItems": clone(next_items)}),
         build_replace_section_patch("sec_action_plan", section),
         build_prepend_message_patch(
             build_message(
@@ -1214,6 +1416,14 @@ def build_confirm_action_plan_patches(
 
     return [
         build_set_state_patch("resolved_with_action"),
+        build_set_context_patch(
+            {
+                **_context(envelope),
+                "riskDecision": current_decision,
+                "riskReason": current_reason,
+                "actionItems": _action_plan_items(envelope),
+            }
+        ),
         build_remove_section_patch("sec_action_plan"),
         build_append_section_patch(
             resolution_section,
