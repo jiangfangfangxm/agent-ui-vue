@@ -161,6 +161,12 @@ generated/warning_review_workbench/
 
 生成产物暂不自动覆盖或接入当前 runtime，主要作为下一阶段代码生成和装配链路的稳定输出契约。
 
+当前已接入的 generated 配置：
+
+- 前端从 `generated/warning_review_workbench/app.normalized.json` 读取事件契约和初始 `WorkflowContext` 默认值
+- Python patch service 从同一份 generated 配置读取事件契约和 `allowedEvents`
+- 复杂业务 patch builder 仍由当前手写 Python 代码执行
+
 ### 前端类型检查 / 构建
 
 ```bash

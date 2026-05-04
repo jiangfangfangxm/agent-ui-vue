@@ -61,7 +61,7 @@ EVENT_CONTRACTS: Dict[str, Dict[str, Any]] = {
     },
     'set_risk_decision': {
         'states': ['risk_identifying', 'action_planning'],
-        'validate_payload': lambda payload: _has_non_empty_string(payload, 'decision') and payload.get('decision') in {'no_risk', 'has_risk'},
+        'validate_payload': lambda payload: _has_non_empty_string(payload, 'decision') and payload.get('decision') in {'has_risk', 'no_risk'},
     },
     'update_risk_reason': {
         'states': ['risk_identifying', 'action_planning'],

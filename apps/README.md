@@ -64,9 +64,12 @@ README.generated.md
 
 说明：
 
-- 生成产物暂不自动接入 runtime。
+- 当前项目已读取 `generated/warning_review_workbench/app.normalized.json`。
+- 前端会从 generated 配置读取事件契约和初始 `WorkflowContext` 默认值。
+- Python patch service 会从 generated 配置读取事件契约和 `allowedEvents`。
+- 复杂 patch builder 和 section builder 仍由当前人工维护代码执行。
 - 编译器不会覆盖当前人工维护的 `src/` 或 `python/agent_patch_builders/` 文件。
-- 下一阶段可以把 generated 文件逐步接入 runtime 或作为代码生成模板继续扩展。
+- 下一阶段可以继续把 section builder、patch builder 骨架和测试从 generated 产物接入 runtime。
 
 ## 当前约束
 
