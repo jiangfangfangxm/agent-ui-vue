@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from "vue";
+import type { CSSProperties } from "vue";
 import type { WidgetPropsOfType } from "./widgetContract";
 
 const props = defineProps<WidgetPropsOfType<"key_value">>();
@@ -8,7 +9,7 @@ const isGridLayout = computed(
   () => props.component.props.layout === "grid",
 );
 
-const gridStyle = computed<Record<string, string>>(() => {
+const gridStyle = computed<CSSProperties>(() => {
   if (!isGridLayout.value) {
     return {};
   }

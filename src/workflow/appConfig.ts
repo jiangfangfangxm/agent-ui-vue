@@ -1,37 +1,58 @@
 import generatedAppConfig from "../../generated/warning_review_workbench/app.normalized.json";
 import type { ChecklistItem, WorkflowContext, WorkflowState } from "../types/workflow";
 
-interface PayloadPropertySchema {
+export interface PayloadPropertySchema {
   type?: string | string[];
   minLength?: number;
   enum?: string[];
 }
 
-interface PayloadSchema {
+export interface PayloadSchema {
+  type?: string;
   required?: string[];
   properties?: Record<string, PayloadPropertySchema>;
 }
 
-interface GeneratedEventConfig {
+export interface GeneratedEventConfig {
+  label?: string;
+  source?: string;
+  handler?: string;
   allowedStates?: string[];
+  allowedModes?: string[];
   payloadSchema?: PayloadSchema;
+  transition?: {
+    toState?: string;
+    contextWrites?: string[];
+    sectionEffects?: Record<string, unknown>;
+    conditional?: unknown[];
+  };
 }
 
-interface GeneratedStateConfig {
+export interface GeneratedStateConfig {
+  title?: string;
+  description?: string;
+  category?: string;
+  visibleSections?: string[];
   allowedEvents?: string[];
 }
 
-interface GeneratedContextFieldConfig {
+export interface GeneratedContextFieldConfig {
+  type?: string;
+  description?: string;
   default?: unknown;
+  values?: string[];
 }
 
-interface GeneratedModeConfig {
+export interface GeneratedModeConfig {
   allowedEvents?: string[];
 }
 
-interface GeneratedAppConfig {
+export interface GeneratedAppConfig {
   app: {
     id: string;
+    name: string;
+    description: string;
+    runtime: string;
     entryState: string;
     initialEvent: string;
   };

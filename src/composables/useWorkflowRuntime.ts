@@ -112,7 +112,9 @@ export function useWorkflowRuntime() {
       lastError.value =
         error instanceof PatchApplicationError
           ? error.message
-          : "应用 Patch 时发生了未预期的运行时错误。";
+          : error instanceof Error
+            ? error.message
+            : "应用 Patch 时发生了未预期的运行时错误。";
 
       envelope.value = {
         ...envelope.value,
