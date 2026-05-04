@@ -145,6 +145,22 @@ python -m unittest discover -s python/tests -p "test_*.py"
 - 阶段流转契约测试
 - 非法事件契约测试
 
+### 编译应用 DSL
+
+当前已提供第一版 CLI 编译/组装工具，可将业务配置 DSL 编译到 `generated/` 目录：
+
+```bash
+python tools/app_compiler.py apps/warning-review.app.yaml
+```
+
+默认输出：
+
+```text
+generated/warning_review_workbench/
+```
+
+生成产物暂不自动覆盖或接入当前 runtime，主要作为下一阶段代码生成和装配链路的稳定输出契约。
+
 ### 前端类型检查 / 构建
 
 ```bash

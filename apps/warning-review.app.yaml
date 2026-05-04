@@ -1,0 +1,968 @@
+schemaVersion: 0.1.0
+
+app:
+  id: warning_review_workbench
+  name: 预警核查工作台
+  description: 基于 Agent-driven UI Runtime 的三阶段预警核查应用配置。
+  runtime: agent-ui-vue
+  entryState: reviewing
+  initialEvent: init_event
+
+businessModel:
+  pattern: three_stage_risk_workflow
+  stages:
+    - risk_review
+    - risk_identification
+    - action_planning
+
+context:
+  warningDetailItems:
+    type: key_value_items
+    description: 预警情况详情。
+    default: []
+  reviewDirections:
+    type: checklist_items
+    description: 风险核查方向。
+    default: []
+  reportText:
+    type: text
+    description: 当前核查报告正文。
+    default: ""
+  riskDecision:
+    type: enum
+    description: 风险认定结论。
+    values:
+      - has_risk
+      - no_risk
+    default: null
+  riskReason:
+    type: text
+    description: 风险认定说明。
+    default: ""
+  actionItems:
+    type: checklist_items
+    description: 后续行动计划事项。
+    default: []
+
+states:
+  reviewing:
+    title: 风险核查
+    description: 展示预警详情、关联台账和核查方向，支持人工勾选或补充核查方向。
+    category: main
+    visibleSections:
+      - sec_overview
+      - sec_table_demo
+      - sec_main_review
+      - sec_audit
+    allowedEvents:
+      - toggle_check
+      - add_checklist_item
+      - Risk_Check_Event
+      - open_detail
+
+  report_reviewing:
+    title: 报告处理
+    description: 核查报告生成后，支持修改报告、补充核查方向或进入风险认定。
+    category: main
+    visibleSections:
+      - sec_review_report
+      - sec_report_actions
+      - sec_main_review
+      - sec_overview
+      - sec_table_demo
+      - sec_audit
+    allowedEvents:
+      - edit_report
+      - add_review_direction_after_report
+      - enter_risk_identification
+      - open_detail
+
+  awaiting_revision:
+    title: 修改核查报告
+    description: 报告编辑子流程，保存或取消后返回报告处理阶段。
+    category: subflow
+    parentState: report_reviewing
+    visibleSections:
+      - sec_review_report
+      - sec_report_edit
+      - sec_main_review
+      - sec_overview
+      - sec_table_demo
+      - sec_audit
+    allowedEvents:
+      - save_report_revision
+      - cancel_report_revision
+      - open_detail
+
+  risk_identifying:
+    title: 风险认定
+    description: 选择有风险或无风险，并填写风险认定说明。
+    category: main
+    visibleSections:
+      - sec_review_report
+      - sec_risk_identification
+      - sec_main_review
+      - sec_overview
+      - sec_table_demo
+      - sec_audit
+    allowedEvents:
+      - set_risk_decision
+      - update_risk_reason
+      - resolve_no_risk
+      - confirm_risk_identification
+      - open_detail
+
+  action_planning:
+    title: 后续行动计划
+    description: 风险认定为有风险后，制定并确认后续行动计划。
+    category: main
+    visibleSections:
+      - sec_review_report
+      - sec_risk_identification
+      - sec_action_plan
+      - sec_main_review
+      - sec_overview
+      - sec_table_demo
+      - sec_audit
+    allowedEvents:
+      - set_risk_decision
+      - update_risk_reason
+      - resolve_no_risk
+      - toggle_action_item
+      - add_action_item
+      - confirm_action_plan
+      - open_detail
+
+  resolved_no_risk:
+    title: 无风险完成
+    description: 风险认定为无风险，预警已解警。
+    category: terminal
+    visibleSections:
+      - sec_review_report
+      - sec_resolution_result_no_risk
+      - sec_main_review
+      - sec_overview
+      - sec_table_demo
+      - sec_audit
+    allowedEvents:
+      - open_detail
+
+  resolved_with_action:
+    title: 有风险完成
+    description: 风险认定为有风险，行动计划已确认。
+    category: terminal
+    visibleSections:
+      - sec_review_report
+      - sec_resolution_result_with_action
+      - sec_main_review
+      - sec_overview
+      - sec_table_demo
+      - sec_audit
+    allowedEvents:
+      - open_detail
+
+modes:
+  adding_review_direction_after_report:
+    title: 报告阶段新增核查方向
+    baseState: report_reviewing
+    visibleSections:
+      - sec_review_report
+      - sec_add_review_direction
+      - sec_main_review
+      - sec_overview
+      - sec_table_demo
+      - sec_audit
+    allowedEvents:
+      - submit_new_direction_after_report
+      - cancel_add_direction
+      - open_detail
+
+events:
+  init_event:
+    label: 初始化预警核查工作台
+    allowedStates:
+      - reviewing
+    source: system
+    payloadSchema:
+      type: object
+      required: []
+      properties: {}
+    handler: build_init_event_patches
+    transition:
+      toState: reviewing
+      setMode: null
+      contextWrites:
+        - warningDetailItems
+        - reviewDirections
+        - reportText
+        - riskDecision
+        - riskReason
+        - actionItems
+      sectionEffects:
+        replace:
+          - sec_overview
+          - sec_main_review
+      allowedEventsFromState: reviewing
+
+  toggle_check:
+    label: 勾选核查方向
+    allowedStates:
+      - reviewing
+      - report_reviewing
+    source: widget
+    payloadSchema:
+      type: object
+      required:
+        - itemId
+      properties:
+        itemId:
+          type: string
+          minLength: 1
+    handler: build_toggle_checklist_item_patches
+    transition:
+      toState: same
+      contextWrites:
+        - reviewDirections
+      sectionEffects:
+        replace:
+          - sec_main_review
+
+  add_checklist_item:
+    label: 新增核查方向
+    allowedStates:
+      - reviewing
+    source: widget
+    payloadSchema:
+      type: object
+      required:
+        - label
+      properties:
+        label:
+          type: string
+          minLength: 1
+    handler: build_add_checklist_item_patches
+    transition:
+      toState: reviewing
+      contextWrites:
+        - reviewDirections
+      sectionEffects:
+        replace:
+          - sec_main_review
+
+  Risk_Check_Event:
+    label: 执行风险核查
+    allowedStates:
+      - reviewing
+    source: widget
+    payloadSchema:
+      type: object
+      required: []
+      properties:
+        action:
+          type: string
+    handler: build_risk_check_event_patches
+    transition:
+      toState: report_reviewing
+      contextWrites:
+        - reportText
+      sectionEffects:
+        appendBefore:
+          sec_main_review:
+            - sec_review_report
+            - sec_report_actions
+      allowedEventsFromState: report_reviewing
+
+  edit_report:
+    label: 修改核查报告
+    allowedStates:
+      - report_reviewing
+    source: widget
+    payloadSchema:
+      type: object
+      required: []
+      properties: {}
+    handler: build_edit_report_patches
+    transition:
+      toState: awaiting_revision
+      sectionEffects:
+        remove:
+          - sec_report_actions
+        appendBefore:
+          sec_main_review:
+            - sec_report_edit
+      allowedEventsFromState: awaiting_revision
+
+  save_report_revision:
+    label: 保存核查报告
+    allowedStates:
+      - awaiting_revision
+    source: widget
+    payloadSchema:
+      type: object
+      required:
+        - label
+      properties:
+        label:
+          type: string
+          minLength: 1
+    handler: build_save_report_revision_patches
+    transition:
+      toState: report_reviewing
+      contextWrites:
+        - reportText
+      sectionEffects:
+        replace:
+          - sec_review_report
+        remove:
+          - sec_report_edit
+        appendBefore:
+          sec_main_review:
+            - sec_report_actions
+      allowedEventsFromState: report_reviewing
+
+  cancel_report_revision:
+    label: 取消修改核查报告
+    allowedStates:
+      - awaiting_revision
+    source: widget
+    payloadSchema:
+      type: object
+      required: []
+      properties: {}
+    handler: build_cancel_report_revision_patches
+    transition:
+      toState: report_reviewing
+      sectionEffects:
+        remove:
+          - sec_report_edit
+        appendBefore:
+          sec_main_review:
+            - sec_report_actions
+      allowedEventsFromState: report_reviewing
+
+  add_review_direction_after_report:
+    label: 报告阶段新增核查方向
+    allowedStates:
+      - report_reviewing
+    source: widget
+    payloadSchema:
+      type: object
+      required: []
+      properties: {}
+    handler: build_add_review_direction_after_report_patches
+    transition:
+      toState: report_reviewing
+      setMode: adding_review_direction_after_report
+      sectionEffects:
+        appendBefore:
+          sec_main_review:
+            - sec_add_review_direction
+      allowedEventsFromMode: adding_review_direction_after_report
+
+  submit_new_direction_after_report:
+    label: 提交新增核查方向
+    allowedStates:
+      - report_reviewing
+    allowedModes:
+      - adding_review_direction_after_report
+    source: widget
+    payloadSchema:
+      type: object
+      required:
+        - label
+      properties:
+        label:
+          type: string
+          minLength: 1
+    handler: build_submit_new_direction_after_report_patches
+    transition:
+      toState: report_reviewing
+      clearMode: true
+      contextWrites:
+        - reviewDirections
+        - reportText
+      sectionEffects:
+        replace:
+          - sec_main_review
+          - sec_review_report
+        remove:
+          - sec_add_review_direction
+        appendBefore:
+          sec_main_review:
+            - sec_report_actions
+      allowedEventsFromState: report_reviewing
+
+  cancel_add_direction:
+    label: 取消新增核查方向
+    allowedStates:
+      - report_reviewing
+    allowedModes:
+      - adding_review_direction_after_report
+    source: widget
+    payloadSchema:
+      type: object
+      required: []
+      properties: {}
+    handler: build_cancel_add_direction_patches
+    transition:
+      toState: report_reviewing
+      clearMode: true
+      sectionEffects:
+        remove:
+          - sec_add_review_direction
+        appendBefore:
+          sec_main_review:
+            - sec_report_actions
+      allowedEventsFromState: report_reviewing
+
+  enter_risk_identification:
+    label: 进入风险认定
+    allowedStates:
+      - report_reviewing
+    source: widget
+    payloadSchema:
+      type: object
+      required: []
+      properties: {}
+    handler: build_enter_risk_identification_patches
+    transition:
+      toState: risk_identifying
+      contextWrites:
+        - riskDecision
+        - riskReason
+      sectionEffects:
+        appendBefore:
+          sec_main_review:
+            - sec_risk_identification
+      allowedEventsFromState: risk_identifying
+
+  set_risk_decision:
+    label: 设置风险认定结论
+    allowedStates:
+      - risk_identifying
+      - action_planning
+    source: widget
+    payloadSchema:
+      type: object
+      required:
+        - decision
+      properties:
+        decision:
+          type: string
+          enum:
+            - has_risk
+            - no_risk
+    handler: build_set_risk_decision_patches
+    transition:
+      conditional:
+        - when:
+            payload.decision: has_risk
+          toState: action_planning
+          contextWrites:
+            - riskDecision
+            - actionItems
+          sectionEffects:
+            appendBefore:
+              sec_main_review:
+                - sec_action_plan
+          allowedEventsFromState: action_planning
+          includeRiskControls: true
+        - when:
+            payload.decision: no_risk
+          toState: risk_identifying
+          contextWrites:
+            - riskDecision
+            - actionItems
+          sectionEffects:
+            remove:
+              - sec_action_plan
+          allowedEventsFromState: risk_identifying
+
+  update_risk_reason:
+    label: 保存风险认定说明
+    allowedStates:
+      - risk_identifying
+      - action_planning
+    source: widget
+    payloadSchema:
+      type: object
+      required:
+        - label
+      properties:
+        label:
+          type: string
+          minLength: 1
+    handler: build_update_risk_reason_patches
+    transition:
+      toState: same
+      contextWrites:
+        - riskReason
+      sectionEffects:
+        replace:
+          - sec_risk_identification
+          - sec_action_plan
+
+  resolve_no_risk:
+    label: 确认无风险并解警
+    allowedStates:
+      - risk_identifying
+      - action_planning
+    source: widget
+    payloadSchema:
+      type: object
+      required: []
+      properties: {}
+    preconditions:
+      - context.riskDecision == no_risk
+    handler: build_resolve_no_risk_patches
+    transition:
+      toState: resolved_no_risk
+      contextWrites:
+        - riskDecision
+        - riskReason
+        - actionItems
+      sectionEffects:
+        remove:
+          - sec_report_actions
+          - sec_risk_identification
+          - sec_action_plan
+        appendBefore:
+          sec_main_review:
+            - sec_resolution_result_no_risk
+      allowedEventsFromState: resolved_no_risk
+
+  confirm_risk_identification:
+    label: 确认风险认定
+    allowedStates:
+      - risk_identifying
+    source: widget
+    payloadSchema:
+      type: object
+      required: []
+      properties: {}
+    preconditions:
+      - context.riskDecision == has_risk
+    handler: build_confirm_risk_identification_patches
+    transition:
+      toState: action_planning
+      contextWrites:
+        - riskDecision
+        - riskReason
+        - actionItems
+      sectionEffects:
+        remove:
+          - sec_report_actions
+          - sec_risk_identification
+        appendBefore:
+          sec_main_review:
+            - sec_action_plan
+      allowedEventsFromState: action_planning
+
+  toggle_action_item:
+    label: 勾选行动计划事项
+    allowedStates:
+      - action_planning
+    source: widget
+    payloadSchema:
+      type: object
+      required:
+        - itemId
+      properties:
+        itemId:
+          type: string
+          minLength: 1
+    handler: build_toggle_action_item_patches
+    transition:
+      toState: action_planning
+      contextWrites:
+        - actionItems
+      sectionEffects:
+        replace:
+          - sec_action_plan
+
+  add_action_item:
+    label: 新增行动计划事项
+    allowedStates:
+      - action_planning
+    source: widget
+    payloadSchema:
+      type: object
+      required:
+        - label
+      properties:
+        label:
+          type: string
+          minLength: 1
+    handler: build_add_action_item_patches
+    transition:
+      toState: action_planning
+      contextWrites:
+        - actionItems
+      sectionEffects:
+        replace:
+          - sec_action_plan
+
+  confirm_action_plan:
+    label: 确认行动计划
+    allowedStates:
+      - action_planning
+    source: widget
+    payloadSchema:
+      type: object
+      required: []
+      properties: {}
+    preconditions:
+      - context.actionItems.checkedCount >= 1
+    handler: build_confirm_action_plan_patches
+    transition:
+      toState: resolved_with_action
+      contextWrites:
+        - riskDecision
+        - riskReason
+        - actionItems
+      sectionEffects:
+        remove:
+          - sec_action_plan
+        appendBefore:
+          sec_main_review:
+            - sec_resolution_result_with_action
+      allowedEventsFromState: resolved_with_action
+
+  open_detail:
+    label: 查看详情
+    allowedStates:
+      - reviewing
+      - report_reviewing
+      - awaiting_revision
+      - risk_identifying
+      - action_planning
+      - resolved_no_risk
+      - resolved_with_action
+      - presenting_result
+    source: widget
+    payloadSchema:
+      type: object
+      required: []
+      properties:
+        caseId:
+          type: string
+        applicant:
+          type: string
+        amount:
+          type:
+            - string
+            - number
+    handler: build_open_detail_patches
+    transition:
+      toState: same
+      sectionEffects: {}
+
+sections:
+  sec_overview:
+    title: 预警情况详情
+    builder: build_warning_detail_section
+    contextBinding: warningDetailItems
+    components:
+      - id: cmp_warning_detail
+        type: key_value
+        props:
+          layout: grid
+          columns: 3
+          minColumnWidth: 220
+
+  sec_table_demo:
+    title: 关联台账
+    source: initialEnvelope
+    components:
+      - id: cmp_table_demo
+        type: data_table
+
+  sec_main_review:
+    title: 核查方向
+    builder: build_review_direction_section
+    contextBinding: reviewDirections
+    components:
+      - id: cmp_checklist
+        type: checklist
+        eventType: toggle_check
+      - id: cmp_custom_check_input
+        type: text_input
+        eventType: add_checklist_item
+      - id: cmp_actions
+        type: button_group
+        actions:
+          - label: 执行核查
+            eventType: Risk_Check_Event
+            buttonType: primary
+            payload:
+              action: execute
+
+  sec_review_report:
+    title: 核查报告
+    builder: build_risk_check_report_section
+    contextBinding: reportText
+    components:
+      - id: cmp_review_report
+        type: text
+
+  sec_report_actions:
+    title: 报告后续处理
+    builder: build_report_actions_section
+    components:
+      - id: cmp_report_actions
+        type: button_group
+        actions:
+          - label: 修改核查报告
+            eventType: edit_report
+            buttonType: warning
+          - label: 新增核查方向
+            eventType: add_review_direction_after_report
+            buttonType: primary
+          - label: 进入风险认定环节
+            eventType: enter_risk_identification
+            buttonType: success
+
+  sec_report_edit:
+    title: 修改核查报告
+    builder: build_report_edit_section
+    contextBinding: reportText
+    components:
+      - id: cmp_report_revision_input
+        type: text_input
+        eventType: save_report_revision
+        props:
+          inputType: textarea
+          clearOnSubmit: false
+      - id: cmp_report_revision_cancel
+        type: button_group
+        actions:
+          - label: 取消修改
+            eventType: cancel_report_revision
+            buttonType: info
+
+  sec_add_review_direction:
+    title: 新增核查方向
+    builder: build_add_review_direction_section
+    components:
+      - id: cmp_add_review_direction_input
+        type: text_input
+        eventType: submit_new_direction_after_report
+      - id: cmp_add_review_direction_cancel
+        type: button_group
+        actions:
+          - label: 取消新增核查方向
+            eventType: cancel_add_direction
+            buttonType: info
+
+  sec_risk_identification:
+    title: 风险认定
+    builder: build_risk_identification_section
+    contextBindings:
+      - riskDecision
+      - riskReason
+    components:
+      - id: cmp_risk_identification_state
+        type: key_value
+      - id: cmp_risk_identification_actions
+        type: button_group
+        actions:
+          - label: 有风险
+            eventType: set_risk_decision
+            buttonType: danger
+            payload:
+              decision: has_risk
+          - label: 无风险
+            eventType: set_risk_decision
+            buttonType: success
+            payload:
+              decision: no_risk
+      - id: cmp_risk_reason_input
+        type: text_input
+        eventType: update_risk_reason
+
+  sec_action_plan:
+    title: 行动计划
+    builder: build_action_plan_section
+    contextBinding: actionItems
+    components:
+      - id: cmp_action_plan_checklist
+        type: checklist
+        eventType: toggle_action_item
+      - id: cmp_action_plan_input
+        type: text_input
+        eventType: add_action_item
+      - id: cmp_action_plan_confirm
+        type: button_group
+        actions:
+          - label: 确认行动计划
+            eventType: confirm_action_plan
+            buttonType: primary
+
+  sec_resolution_result_no_risk:
+    title: 处置结果
+    builder: build_no_risk_resolution_section
+    contextBinding: riskReason
+    components:
+      - id: cmp_resolution_result_no_risk
+        type: result_summary
+
+  sec_resolution_result_with_action:
+    title: 处置结果
+    builder: build_action_resolution_section
+    contextBindings:
+      - riskReason
+      - actionItems
+    components:
+      - id: cmp_resolution_result_with_action
+        type: result_summary
+
+  sec_audit:
+    title: 审计面板
+    source: initialEnvelope
+    components:
+      - id: cmp_audit
+        type: audit_panel
+
+initialData:
+  warningDetailItems:
+    - label: 预警编号
+      value: WARN-20260428-028
+    - label: 客户名称
+      value: 建行-华东星联贸易有限公司
+    - label: 预警类型
+      value: 高频异常交易预警
+    - label: 命中时间
+      value: 2026-04-28 09:03
+    - label: 风险等级
+      value: 高风险
+    - label: 当前状态
+      value: 待人工核查
+
+  reviewDirections:
+    - id: item_account_flow
+      label: 核查近 7 日异常交易流水的真实业务背景
+      description: 确认短时间内高频转入转出是否存在真实交易或结算依据。
+      checked: false
+    - id: item_counterparty
+      label: 核验交易对手与受益人之间是否存在隐性关联
+      description: 关注法人、联系电话、开户地址及历史交易网络中的重合关系。
+      checked: false
+    - id: item_region
+      label: 核查资金是否流向高风险地区或敏感通道
+      description: 重点关注是否存在绕道结算、拆单转移或异常跨境路径。
+      checked: false
+    - id: item_documents
+      label: 补充核验业务合同、发票与物流凭证的一致性
+      description: 确认基础交易资料是否与本次预警触发交易相匹配。
+      checked: false
+
+  actionItems:
+    - id: item_freeze_monitor
+      label: 加强账户交易监测
+      description: 对后续资金流向与交易频率实施更严格的持续监控。
+      checked: false
+    - id: item_manual_review
+      label: 提交人工复核审批
+      description: 将本次预警及核查结果提交上级人工复核并保留审批意见。
+      checked: false
+    - id: item_collect_docs
+      label: 补充收集交易背景材料
+      description: 向客户补充索取合同、发票、物流或付款背景证明材料。
+      checked: false
+    - id: item_limit_channel
+      label: 限制敏感通道交易
+      description: 对高风险通道、时段或交易方式采取临时限制措施。
+      checked: false
+
+compiler:
+  targets:
+    frontend:
+      workflowDefinition: src/workflow/definition.ts
+      initialEnvelope: src/mock/initialEnvelope.ts
+      workflowTypes: src/types/workflow.ts
+    python:
+      workflowDefinition: python/agent_patch_builders/workflow_definition.py
+      sectionBuilders: python/agent_patch_builders/section_builders.py
+      actionBuilders: python/agent_patch_builders/workflow_action_builders.py
+      patchService: python/patch_service.py
+    tests:
+      builderTests: python/tests/test_patch_builders.py
+      transitionContractTests: python/tests/test_workflow_transition_contracts.py
+  generationPolicy:
+    overwriteManualFiles: false
+    generatedDirectory: generated
+    requireContractTests: true
+    requireIllegalEventTests: true
+
+testContracts:
+  requiredPaths:
+    - name: review_to_report
+      events:
+        - init_event
+        - Risk_Check_Event
+      expectedState: report_reviewing
+      expectedSections:
+        present:
+          - sec_review_report
+          - sec_report_actions
+        absent:
+          - sec_report_edit
+          - sec_risk_identification
+          - sec_action_plan
+
+    - name: report_revision
+      events:
+        - init_event
+        - Risk_Check_Event
+        - edit_report
+        - save_report_revision
+      expectedState: report_reviewing
+      expectedSections:
+        present:
+          - sec_review_report
+          - sec_report_actions
+        absent:
+          - sec_report_edit
+
+    - name: no_risk_resolution
+      events:
+        - init_event
+        - Risk_Check_Event
+        - enter_risk_identification
+        - set_risk_decision:no_risk
+        - update_risk_reason
+        - resolve_no_risk
+      expectedState: resolved_no_risk
+      expectedSections:
+        present:
+          - sec_resolution_result_no_risk
+        absent:
+          - sec_risk_identification
+          - sec_action_plan
+
+    - name: has_risk_action_plan
+      events:
+        - init_event
+        - Risk_Check_Event
+        - enter_risk_identification
+        - set_risk_decision:has_risk
+        - add_action_item
+        - confirm_action_plan
+      expectedState: resolved_with_action
+      expectedSections:
+        present:
+          - sec_resolution_result_with_action
+        absent:
+          - sec_action_plan
+
+  illegalEvents:
+    - name: cannot_confirm_action_plan_in_report_stage
+      startState: report_reviewing
+      eventType: confirm_action_plan
+      expectedError: contract_rejected
+    - name: cannot_save_blank_report_revision
+      startState: awaiting_revision
+      eventType: save_report_revision
+      payload:
+        label: "   "
+      expectedError: payload_invalid
