@@ -233,7 +233,7 @@ function buildReviewDirectionSection(): UISection {
               label: "Save核查",
               eventType: "Risk_Check_Event",
               payload: { action: "execute" },
-              buttonType: "second",
+              buttonType: "info",
             },
           ],
         },

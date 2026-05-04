@@ -145,6 +145,56 @@ python -m unittest discover -s python/tests -p "test_*.py"
 - 阶段流转契约测试
 - 非法事件契约测试
 
+### 编译应用 DSL
+
+当前已提供第一版 CLI 编译/组装工具，可将业务配置 DSL 编译到 `generated/` 目录：
+
+```bash
+python tools/app_compiler.py apps/warning-review.app.yaml
+```
+
+默认输出：
+
+```text
+generated/warning_review_workbench/
+```
+
+生成产物暂不自动覆盖或接入当前 runtime，主要作为下一阶段代码生成和装配链路的稳定输出契约。
+
+当前已接入的 generated 配置：
+
+- 前端从 `generated/warning_review_workbench/app.normalized.json` 读取事件契约和初始 `WorkflowContext` 默认值
+- Python patch service 从同一份 generated 配置读取事件契约和 `allowedEvents`
+- 复杂业务 patch builder 仍由当前手写 Python 代码执行
+
+### 业务配置工具
+
+前端内置了第一版业务配置工具。启动前端后，可在页面右上角切换：
+
+```text
+运行台 / 配置工具
+```
+
+配置工具当前支持：
+
+- 查看和编辑应用基本信息
+- 查看 context 字段
+- 编辑阶段标题、说明、allowedEvents、visibleSections
+- 编辑事件基础信息、允许状态、处理程序
+- 查看 section 与 widget 绑定
+- 做基础引用校验
+- 查看编译前检查、生成 CLI 编译命令、确认预计产物
+- 导出当前内存配置为 YAML
+
+当前配置工具只在浏览器内存中编辑，不会直接写回 `apps/warning-review.app.yaml`。
+导出后仍需要执行编译命令生成 `generated` 产物：
+
+```bash
+python tools/app_compiler.py apps/warning-review.app.yaml
+```
+
+配置工具的“编译”页当前只负责校验、说明和命令生成，不直接在浏览器里执行本地 Python。
+
 ### 前端类型检查 / 构建
 
 ```bash

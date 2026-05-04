@@ -4,18 +4,14 @@
  * 真正的预警详情、核查方向以及后续交互能力，会在 init_event 后通过 patch 回填。
  */
 import type { WorkflowEnvelope } from "../types/workflow";
+import { createContextFromAppConfig } from "../workflow/appConfig";
 
 export const initialEnvelope: WorkflowEnvelope = {
   id: "wf_warning_review_001",
   version: "1.0.0",
   state: "reviewing",
   allowedEvents: ["init_event"],
-  context: {
-    warningDetailItems: [],
-    reviewDirections: [],
-    riskReason: "",
-    actionItems: [],
-  },
+  context: createContextFromAppConfig(),
   riskSummary: {
     level: "medium",
     summary: "页面已启动，正在等待初始化预警数据。",

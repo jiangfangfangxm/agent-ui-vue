@@ -1,5 +1,9 @@
 node_modules/
 dist/
 .vite/
+.tmp_tests/
+__pycache__/
+generated/**/__pycache__/
+generated/_test_app_compiler/
 *.log
 .DS_Store

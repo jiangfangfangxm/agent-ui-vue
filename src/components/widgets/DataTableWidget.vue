@@ -16,7 +16,7 @@ const emit = defineEmits<{
 }>();
 
 const { isEventAllowed, dispatch } = useWidgetEvents(
-  props.runtime,
+  () => props.runtime,
   emit,
   props.component.id,
 );

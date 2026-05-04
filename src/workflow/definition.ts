@@ -1,4 +1,5 @@
 import type { WorkflowEventInput, WorkflowState } from "../types/workflow";
+import { getEventConfig, validatePayloadBySchema } from "./appConfig";
 
 export type WorkflowEventType =
   | "init_event"
@@ -152,6 +153,16 @@ export const workflowEventContracts: Record<
 export function getEventContract(
   eventType: string,
 ): WorkflowEventContract | undefined {
+  const generatedEvent = getEventConfig(eventType);
+  if (generatedEvent) {
+    return {
+      eventType: eventType as WorkflowEventType,
+      allowedStates: (generatedEvent.allowedStates ?? []) as WorkflowState[],
+      validatePayload: (payload) =>
+        validatePayloadBySchema(payload, generatedEvent.payloadSchema),
+    };
+  }
+
   return workflowEventContracts[eventType as WorkflowEventType];
 }
 
