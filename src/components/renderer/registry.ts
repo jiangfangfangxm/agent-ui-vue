@@ -10,7 +10,10 @@ import AuditPanelWidget from "../widgets/AuditPanelWidget.vue";
 import BadgeListWidget from "../widgets/BadgeListWidget.vue";
 import ButtonGroupWidget from "../widgets/ButtonGroupWidget.vue";
 import ChecklistWidget from "../widgets/ChecklistWidget.vue";
+import CasePosterWidget from "../widgets/CasePosterWidget.vue";
+import ConfigWorkbenchWidget from "../widgets/ConfigWorkbenchWidget.vue";
 import DataTableWidget from "../widgets/DataTableWidget.vue";
+import FraudAuditPanelWidget from "../widgets/FraudAuditPanelWidget.vue";
 import KeyValueWidget from "../widgets/KeyValueWidget.vue";
 import ResultSummaryWidget from "../widgets/ResultSummaryWidget.vue";
 import TextWidget from "../widgets/TextWidget.vue";
@@ -26,9 +29,15 @@ export const registry = {
   data_table: DataTableWidget,
   badge_list: BadgeListWidget,
   checklist: ChecklistWidget,
+  case_poster: CasePosterWidget,
   button_group: ButtonGroupWidget,
   result_summary: ResultSummaryWidget,
   audit_panel: AuditPanelWidget,
+  ConfigWorkbench: ConfigWorkbenchWidget,
+  FraudAuditPanel: FraudAuditPanelWidget,
+  status_tree: FraudAuditPanelWidget,
+  radar_chart: FraudAuditPanelWidget,
+  markdown_tabs: FraudAuditPanelWidget,
 } satisfies WidgetRegistry;
 
 export function resolveWidget(type: WidgetType): Component {
