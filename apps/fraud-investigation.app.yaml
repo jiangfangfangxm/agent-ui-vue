@@ -1,0 +1,716 @@
+schemaVersion: 0.1.0
+
+app:
+  id: fraud_investigation_workbench
+  name: 反欺诈核查工作台
+  description: 面向多模式并行核查的反欺诈工作台配置。
+  runtime: agent-ui-vue
+  entryState: RuleTriggered
+  initialEvent: rule_triggered
+
+context:
+  selectedModes:
+    type: category_mode_selection
+    description: 用户在配置阶段勾选的分类/场景集合，支持自动必选与可选场景。
+    default: {}
+  executionTree:
+    type: scenario_status_tree
+    description: 已执行场景状态树，记录成功/失败/进行中。
+    default: []
+  progressStream:
+    type: stream_events
+    description: investigation_progress 流式事件缓存。
+    default: []
+  radarScores:
+    type: radar_scores
+    description: 四维风险雷达指标得分。
+    default:
+      fraud_prob: 0
+      willingness: 0
+      capacity: 0
+      authenticity: 0
+  categoryReports:
+    type: markdown_reports
+    description: 按 8 大分类组织的单模式综合报告。
+    default: {}
+  followUpMessages:
+    type: chat_messages
+    description: 自然语言追问消息记录。
+    default: []
+  finalDecision:
+    type: enum
+    description: 最终处置结果。
+    values:
+      - confirm_risk
+      - mark_false_positive
+      - supplement_investigation
+      - generate_poster
+    default: null
+
+states:
+  RuleTriggered:
+    title: 规则触发
+    description: 风控规则命中后进入工作台并加载默认核查配置。
+    category: start
+    visibleSections:
+      - sec_rule_bootstrap
+    allowedEvents:
+      - rule_triggered
+
+  SelectModes:
+    title: 选择核查模式
+    description: 在 ConfigWorkbench 中配置 8 大分类及其自动必选/可选场景。
+    category: main
+    visibleSections:
+      - sec_select_modes
+    allowedEvents:
+      - select_mode
+      - select_required_scenarios
+      - select_optional_scenarios
+      - start_parallel_execution
+
+  ParallelExecuting:
+    title: 并行执行
+    description: 通过 ProgressWidget 订阅 investigation_progress 流式事件并展示进度。
+    category: main
+    visibleSections:
+      - sec_parallel_progress
+    allowedEvents:
+      - investigation_progress
+      - finish_parallel_execution
+
+  ReviewAndConfirm:
+    title: 复核确认
+    description: 展示执行状态树、四维雷达图、分类 Markdown 报告，并进行最终动作决策。
+    category: main
+    visibleSections:
+      - sec_fraud_audit_panel
+      - sec_follow_up_channel
+      - sec_review_action_bar
+    allowedEvents:
+      - handle_nl_query
+      - confirm_risk
+      - mark_false_positive
+      - supplement_investigation
+      - generate_poster
+
+events:
+  rule_triggered:
+    label: 规则触发进入工作台
+    allowedStates:
+      - RuleTriggered
+    source: system
+    payloadSchema:
+      type: object
+      required: []
+      properties: {}
+    handler: build_rule_triggered_patches
+    transition:
+      toState: SelectModes
+      contextWrites:
+        - selectedModes
+        - executionTree
+        - progressStream
+        - radarScores
+        - categoryReports
+        - followUpMessages
+        - finalDecision
+      sectionEffects:
+        replace:
+          - sec_select_modes
+      allowedEventsFromState: SelectModes
+
+  select_mode:
+    label: 勾选分类菜单
+    allowedStates:
+      - SelectModes
+    source: widget
+    payloadSchema:
+      type: object
+      required:
+        - category
+      properties:
+        category:
+          type: string
+          minLength: 1
+        selected:
+          type: boolean
+    handler: build_select_mode_patches
+    transition:
+      toState: same
+      contextWrites:
+        - selectedModes
+      sectionEffects:
+        replace:
+          - sec_select_modes
+
+  select_required_scenarios:
+    label: 勾选自动必选场景
+    allowedStates:
+      - SelectModes
+    source: widget
+    payloadSchema:
+      type: object
+      required:
+        - category
+        - scenarioIds
+      properties:
+        category:
+          type: string
+          minLength: 1
+        scenarioIds:
+          type: array
+          items:
+            type: string
+    handler: build_select_required_scenarios_patches
+    transition:
+      toState: same
+      contextWrites:
+        - selectedModes
+      sectionEffects:
+        replace:
+          - sec_select_modes
+
+  select_optional_scenarios:
+    label: 勾选可选场景
+    allowedStates:
+      - SelectModes
+    source: widget
+    payloadSchema:
+      type: object
+      required:
+        - category
+        - scenarioIds
+      properties:
+        category:
+          type: string
+          minLength: 1
+        scenarioIds:
+          type: array
+          items:
+            type: string
+    handler: build_select_optional_scenarios_patches
+    transition:
+      toState: same
+      contextWrites:
+        - selectedModes
+      sectionEffects:
+        replace:
+          - sec_select_modes
+
+  start_parallel_execution:
+    label: 开始并行执行
+    allowedStates:
+      - SelectModes
+    source: widget
+    payloadSchema:
+      type: object
+      required: []
+      properties: {}
+    handler: build_start_parallel_execution_patches
+    transition:
+      toState: ParallelExecuting
+      contextWrites:
+        - progressStream
+        - executionTree
+      sectionEffects:
+        replace:
+          - sec_parallel_progress
+      allowedEventsFromState: ParallelExecuting
+
+  investigation_progress:
+    label: 核查进度流式更新
+    allowedStates:
+      - ParallelExecuting
+    source: stream
+    payloadSchema:
+      type: object
+      required:
+        - scenarioId
+        - status
+      properties:
+        scenarioId:
+          type: string
+          minLength: 1
+        status:
+          type: string
+          enum:
+            - queued
+            - running
+            - success
+            - failed
+        detail:
+          type: string
+    handler: build_investigation_progress_patches
+    transition:
+      toState: same
+      contextWrites:
+        - progressStream
+        - executionTree
+      sectionEffects:
+        replace:
+          - sec_parallel_progress
+
+  finish_parallel_execution:
+    label: 并行核查完成
+    allowedStates:
+      - ParallelExecuting
+    source: system
+    payloadSchema:
+      type: object
+      required: []
+      properties: {}
+    handler: build_finish_parallel_execution_patches
+    transition:
+      toState: ReviewAndConfirm
+      contextWrites:
+        - executionTree
+        - radarScores
+        - categoryReports
+      sectionEffects:
+        replace:
+          - sec_fraud_audit_panel
+          - sec_follow_up_channel
+          - sec_review_action_bar
+      allowedEventsFromState: ReviewAndConfirm
+
+  handle_nl_query:
+    label: 自然语言追问
+    allowedStates:
+      - ReviewAndConfirm
+    source: widget
+    payloadSchema:
+      type: object
+      required:
+        - question
+      properties:
+        question:
+          type: string
+          minLength: 1
+    handler: build_handle_nl_query_patches
+    transition:
+      toState: same
+      contextWrites:
+        - followUpMessages
+      sectionEffects:
+        replace:
+          - sec_follow_up_channel
+
+  confirm_risk:
+    label: 确认风险
+    allowedStates:
+      - ReviewAndConfirm
+    source: widget
+    payloadSchema:
+      type: object
+      required: []
+      properties: {}
+    handler: build_confirm_risk_patches
+    transition:
+      toState: same
+      contextWrites:
+        - finalDecision
+
+  mark_false_positive:
+    label: 标记误杀
+    allowedStates:
+      - ReviewAndConfirm
+    source: widget
+    payloadSchema:
+      type: object
+      required: []
+      properties: {}
+    handler: build_mark_false_positive_patches
+    transition:
+      toState: same
+      contextWrites:
+        - finalDecision
+
+  supplement_investigation:
+    label: 补充核查
+    allowedStates:
+      - ReviewAndConfirm
+    source: widget
+    payloadSchema:
+      type: object
+      required: []
+      properties: {}
+    handler: build_supplement_investigation_patches
+    transition:
+      toState: SelectModes
+      contextWrites:
+        - finalDecision
+      allowedEventsFromState: SelectModes
+
+  generate_poster:
+    label: 生成海报
+    allowedStates:
+      - ReviewAndConfirm
+    source: widget
+    payloadSchema:
+      type: object
+      required: []
+      properties: {}
+    handler: build_generate_poster_patches
+    transition:
+      toState: same
+      contextWrites:
+        - finalDecision
+
+sections:
+  sec_rule_bootstrap:
+    title: 规则触发初始化
+    source: initialEnvelope
+    components:
+      - id: cmp_rule_bootstrap
+        type: text
+        props:
+          content: 正在加载反欺诈核查工作台...
+
+  sec_select_modes:
+    title: 模式配置工作台
+    builder: build_config_workbench_section
+    contextBinding: selectedModes
+    components:
+      - id: cmp_config_workbench
+        type: ConfigWorkbench
+        props:
+          leftMenu:
+            - id: credit
+              label: 征信核查
+            - id: device
+              label: 设备核查
+            - id: business
+              label: 工商核查
+            - id: operation
+              label: 经营核查
+            - id: internal
+              label: 行内核查
+            - id: cross_modal
+              label: 跨模态核查
+            - id: intelligence
+              label: 情报核查
+            - id: custom
+              label: 自定义查询
+          requiredScenarioEventType: select_required_scenarios
+          optionalScenarioEventType: select_optional_scenarios
+          categorySelectEventType: select_mode
+          categories:
+            credit:
+              required:
+                - id: credit_beautify
+                  label: 征信美化
+                - id: credit_qualification
+                  label: 征信资质
+              optional:
+                - id: debt_sharing
+                  label: 共债情况
+                - id: credit_history
+                  label: 征信历史
+            device:
+              required:
+                - id: device_sharing
+                  label: 设备共用
+                - id: frequent_device_switching
+                  label: 频繁切换设备
+              optional:
+                - id: gps_trajectory
+                  label: GPS轨迹
+                - id: vm_detection
+                  label: 虚拟机检测
+            business:
+              required:
+                - id: operator_change
+                  label: 经营者变更
+              optional:
+                - id: industry_change
+                  label: 行业变更
+                - id: address_change
+                  label: 地址变更
+                - id: business_authenticity
+                  label: 经营真实
+            operation:
+              required:
+                - id: settlement_fluctuation
+                  label: 结算波动
+              optional:
+                - id: loan_deposit_ratio
+                  label: 存贷比
+                - id: transaction_activity
+                  label: 流水活跃度
+            internal:
+              required:
+                - id: information_conflict
+                  label: 信息矛盾
+              optional:
+                - id: employee_modification_record
+                  label: 员工修改记录
+                - id: warning_signal
+                  label: 预警信号
+            cross_modal:
+              required:
+                - id: business_photo_conflict
+                  label: 经营照片矛盾
+              optional:
+                - id: industry_photo_conflict
+                  label: 行业照片矛盾
+            intelligence:
+              required:
+                - id: email_intelligence
+                  label: 邮件情报
+              optional:
+                - id: network_investigation
+                  label: 联网排查
+            custom:
+              required:
+                - id: natural_language_query
+                  label: 自然语言查询
+              optional:
+                - id: nl2sql_conversion
+                  label: NL2SQL转换
+      - id: cmp_start_parallel_execution
+        type: button_group
+        actions:
+          - label: 开始并行核查
+            eventType: start_parallel_execution
+            buttonType: primary
+
+  sec_parallel_progress:
+    title: 并行执行进度
+    builder: build_parallel_progress_section
+    contextBinding: progressStream
+    components:
+      - id: cmp_progress_widget
+        type: ProgressWidget
+        props:
+          streamEventType: investigation_progress
+          statusBinding: executionTree
+
+  sec_fraud_audit_panel:
+    title: 反欺诈复核面板
+    builder: build_fraud_audit_panel_section
+    contextBindings:
+      - executionTree
+      - radarScores
+      - categoryReports
+    components:
+      - id: cmp_fraud_audit_panel
+        type: FraudAuditPanel
+        props:
+          leftSidebar:
+            title: 执行状态树
+            component:
+              id: cmp_execution_status_tree
+              type: status_tree
+              dataBinding: executionTree
+              statusMapping:
+                success: 成功
+                failed: 失败
+                running: 进行中
+                queued: 排队中
+          mainArea:
+            top:
+              id: cmp_risk_radar
+              type: radar_chart
+              title: 四维风险雷达
+              metrics:
+                - key: fraud_prob
+                  label: 欺诈可能性
+                - key: willingness
+                  label: 还款意愿
+                - key: capacity
+                  label: 还款能力
+                - key: authenticity
+                  label: 数据真实性
+              dataBinding: radarScores
+            bottom:
+              id: cmp_category_reports
+              type: markdown_tabs
+              title: 分类综合报告
+              dataBinding: categoryReports
+              categories:
+                - credit
+                - device
+                - business
+                - operation
+                - internal
+                - cross_modal
+                - intelligence
+                - custom
+
+  sec_follow_up_channel:
+    title: 追问通道
+    builder: build_follow_up_channel_section
+    contextBinding: followUpMessages
+    components:
+      - id: cmp_side_message_panel
+        type: SideMessagePanel
+        eventType: handle_nl_query
+        props:
+          placement: right
+          inputPlaceholder: 请输入自然语言追问内容
+
+  sec_review_action_bar:
+    title: 动作栏
+    source: initialEnvelope
+    components:
+      - id: cmp_review_action_bar
+        type: button_group
+        actions:
+          - label: 确认风险
+            eventType: confirm_risk
+            buttonType: danger
+          - label: 标记误杀
+            eventType: mark_false_positive
+            buttonType: warning
+          - label: 补充核查
+            eventType: supplement_investigation
+            buttonType: primary
+          - label: 生成海报
+            eventType: generate_poster
+            buttonType: success
+
+initialData:
+  selectedModes:
+    credit:
+      required:
+        - credit_beautify
+        - credit_qualification
+      optional: []
+    device:
+      required:
+        - device_sharing
+        - frequent_device_switching
+      optional: []
+    business:
+      required:
+        - operator_change
+      optional: []
+    operation:
+      required:
+        - settlement_fluctuation
+      optional: []
+    internal:
+      required:
+        - information_conflict
+      optional: []
+    cross_modal:
+      required:
+        - business_photo_conflict
+      optional: []
+    intelligence:
+      required:
+        - email_intelligence
+      optional: []
+    custom:
+      required:
+        - natural_language_query
+      optional: []
+  executionTree: []
+  progressStream: []
+  radarScores:
+    fraud_prob: 0
+    willingness: 0
+    capacity: 0
+    authenticity: 0
+  categoryReports:
+    credit: "## 征信核查 - 等待执行结果汇总"
+    device: "## 设备核查 - 等待执行结果汇总"
+    business: "## 工商核查 - 等待执行结果汇总"
+    operation: "## 经营核查 - 等待执行结果汇总"
+    internal: "## 行内核查 - 等待执行结果汇总"
+    cross_modal: "## 跨模态核查 - 等待执行结果汇总"
+    intelligence: "## 情报核查 - 等待执行结果汇总"
+    custom: "## 自定义查询 - 等待执行结果汇总"
+  followUpMessages: []
+  finalDecision: null
+
+testContracts:
+  requiredPaths:
+    - name: rule_trigger_to_mode_selection
+      events:
+        - rule_triggered
+      expectedState: SelectModes
+      expectedSections:
+        present:
+          - sec_select_modes
+        absent:
+          - sec_parallel_progress
+          - sec_fraud_audit_panel
+
+    - name: mode_selection_to_parallel_execution
+      events:
+        - rule_triggered
+        - start_parallel_execution
+      expectedState: ParallelExecuting
+      expectedSections:
+        present:
+          - sec_parallel_progress
+        absent:
+          - sec_fraud_audit_panel
+          - sec_review_action_bar
+
+    - name: parallel_execution_to_review_and_confirm
+      events:
+        - rule_triggered
+        - start_parallel_execution
+        - investigation_progress
+        - finish_parallel_execution
+      expectedState: ReviewAndConfirm
+      expectedSections:
+        present:
+          - sec_fraud_audit_panel
+          - sec_follow_up_channel
+          - sec_review_action_bar
+        absent:
+          - sec_parallel_progress
+
+    - name: review_back_to_mode_selection
+      events:
+        - rule_triggered
+        - start_parallel_execution
+        - investigation_progress
+        - finish_parallel_execution
+        - supplement_investigation
+      expectedState: SelectModes
+      expectedSections:
+        present:
+          - sec_select_modes
+        absent:
+          - sec_parallel_progress
+
+  illegalEvents:
+    - name: cannot_start_parallel_execution_in_rule_triggered
+      startState: RuleTriggered
+      eventType: start_parallel_execution
+      expectedError: contract_rejected
+    - name: cannot_finish_parallel_execution_in_select_modes
+      startState: SelectModes
+      eventType: finish_parallel_execution
+      expectedError: contract_rejected
+    - name: cannot_push_progress_after_review_stage
+      startState: ReviewAndConfirm
+      eventType: investigation_progress
+      expectedError: contract_rejected
+
+compiler:
+  targets:
+    frontend:
+      workflowDefinition: src/workflow/definition.ts
+      initialEnvelope: src/mock/initialEnvelope.ts
+      workflowTypes: src/types/workflow.ts
+    python:
+      workflowDefinition: python/agent_patch_builders/workflow_definition.py
+      sectionBuilders: python/agent_patch_builders/section_builders.py
+      actionBuilders: python/agent_patch_builders/workflow_action_builders.py
+      patchService: python/patch_service.py
+    tests:
+      builderTests: python/tests/test_patch_builders.py
+      transitionContractTests: python/tests/test_workflow_transition_contracts.py
+  generationPolicy:
+    overwriteManualFiles: true
+    generatedDirectory: generated
+    requireContractTests: true
+    requireIllegalEventTests: true
+
+# 提醒：生成/更新相关 runtime 代码后，请运行 `python tools/app_compiler.py`

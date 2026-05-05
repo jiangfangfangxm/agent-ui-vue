@@ -37,14 +37,22 @@ const actionPlanDebug = computed(() => {
 });
 
 onMounted(() => {
-  if (!envelope.value.allowedEvents.includes("init_event")) {
+  // 1. 优先捕获反欺诈平台的专属启动事件
+  if (envelope.value.allowedEvents.includes("rule_triggered")) {
+    void dispatchEvent({
+      type: "rule_triggered",
+      componentId: "system_init",
+    });
     return;
   }
-
-  void dispatchEvent({
-    type: "init_event",
-    componentId: "system_init",
-  });
+  
+  // 2. 兼容旧版预警核查启动事件
+  if (envelope.value.allowedEvents.includes("init_event")) {
+    void dispatchEvent({
+      type: "init_event",
+      componentId: "system_init",
+    });
+  }
 });
 </script>
 
